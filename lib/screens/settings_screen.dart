@@ -1,6 +1,7 @@
 import 'package:finamp/screens/interaction_settings_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:locale_names/locale_names.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -11,6 +12,7 @@ import 'downloads_settings_screen.dart';
 import 'audio_service_settings_screen.dart';
 import 'layout_settings_screen.dart';
 import '../components/SettingsScreen/logout_list_tile.dart';
+import 'about_screen.dart';
 import 'view_selector.dart';
 import 'language_selection_screen.dart';
 
@@ -35,9 +37,17 @@ class SettingsScreen extends StatelessWidget {
 
               showAboutDialog(
                 context: context,
-                applicationName: packageInfo.appName,
+                applicationName: "AnglerAmp",
                 applicationVersion: packageInfo.version,
                 applicationLegalese: applicationLegalese,
+                applicationIcon: Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: SvgPicture.asset(
+                    'assets/icon/angleramp_icon.svg',
+                    width: 64,
+                    height: 64,
+                  ),
+                ),
               );
             },
           )
@@ -96,6 +106,12 @@ class SettingsScreen extends StatelessWidget {
                   .pushNamed(LanguageSelectionScreen.routeName),
             ),
             const LogoutListTile(),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: Text(AppLocalizations.of(context)!.about),
+              onTap: () => Navigator.of(context)
+                  .pushNamed(AboutScreen.routeName),
+            ),
           ],
         ),
       ),

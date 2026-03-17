@@ -140,11 +140,13 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
       if (currentIndex != null) {
         final currentItem = _getQueueItem(currentIndex);
 
-        // Differences in queue index or item id are considered track changes
-        if (currentIndex != prevIndex || currentItem.id != prevItem?.id) {
-          mediaItem.add(currentItem);
+        if (currentItem != null) {
+          // Differences in queue index or item id are considered track changes
+          if (currentIndex != prevIndex || currentItem.id != prevItem?.id) {
+            mediaItem.add(currentItem);
 
-          onTrackChanged(currentItem, currentState, prevItem, prevState);
+            onTrackChanged(currentItem, currentState, prevItem, prevState);
+          }
         }
       }
 
@@ -209,7 +211,7 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
         final currentIndex = _player.currentIndex;
         if (_queueAudioSource.length != 0 && currentIndex != null) {
           final item = _getQueueItem(currentIndex);
-          _offlineListenLogHelper.logOfflineListen(item);
+          if (item != null) _offlineListenLogHelper.logOfflineListen(item);
         }
       }
 
@@ -328,14 +330,16 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
           _audioServiceBackgroundTaskLogger.severe(
               "_player.currentIndex is null during onUpdateQueue, not setting new media item");
         } else {
-          mediaItem.add(_getQueueItem(_player.currentIndex!));
+          final item = _getQueueItem(_player.currentIndex!);
+          if (item != null) mediaItem.add(item);
         }
       } else {
         if (nextInitialIndex == null) {
           _audioServiceBackgroundTaskLogger.severe(
               "nextInitialIndex is null during onUpdateQueue, not setting new media item");
         } else {
-          mediaItem.add(_getQueueItem(nextInitialIndex!));
+          final item = _getQueueItem(nextInitialIndex!);
+          if (item != null) mediaItem.add(item);
         }
       }
 
@@ -541,6 +545,7 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
       return null;
     }
     final item = _getQueueItem(currentIndex);
+    if (item == null) return null;
 
     return generatePlaybackProgressInfo(
       item,
@@ -660,7 +665,12 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
     }
   }
 
-  MediaItem _getQueueItem(int index) {
+  MediaItem? _getQueueItem(int index) {
+    if (_queueAudioSource.sequence.isEmpty ||
+        index < 0 ||
+        index >= _queueAudioSource.sequence.length) {
+      return null;
+    }
     return _queueAudioSource.sequence[index].tag as MediaItem;
   }
 

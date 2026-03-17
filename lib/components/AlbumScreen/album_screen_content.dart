@@ -2,13 +2,14 @@ import 'package:finamp/components/AlbumScreen/sync_album_or_playlist_button.dart
 import 'package:finamp/services/downloads_helper.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:get_it/get_it.dart';
 
 import '../../models/jellyfin_models.dart';
 import '../../services/finamp_settings_helper.dart';
 import '../../components/favourite_button.dart';
+import '../../components/MusicScreen/album_item.dart';
 import 'album_screen_content_flexible_space_bar.dart';
 import 'delete_button.dart';
 import 'song_list_tile.dart';
@@ -44,10 +45,18 @@ class _AlbumScreenContentState extends State<AlbumScreenContent> {
     }
 
     List<List<BaseItemDto>> childrenPerDisc = [];
-    // if not in playlist, try splitting up tracks by disc numbers
-    // if first track has a disc number, let's assume the rest has it too
+
+    // Separate audio-only children for the playback queue (Folder items must
+    // not appear in the queue).
+    final audioChildren =
+        widget.children.where((c) => c.type != "Folder").toList();
+
+    // Split into per-disc groups for multi-disc albums (skip for Folder/Playlist parents).
     if (widget.parent.type != "Playlist" &&
-        widget.children[0].parentIndexNumber != null) {
+        widget.parent.type != "Folder" &&
+        widget.children.isNotEmpty &&
+        audioChildren.isNotEmpty &&
+        audioChildren[0].parentIndexNumber != null) {
       int? lastDiscNumber;
       for (var child in widget.children) {
         if (child.parentIndexNumber != null &&
@@ -73,16 +82,19 @@ class _AlbumScreenContentState extends State<AlbumScreenContent> {
             pinned: true,
             flexibleSpace: AlbumScreenContentFlexibleSpaceBar(
               album: widget.parent,
-              items: widget.children,
+              items: audioChildren,
             ),
             actions: [
               if (widget.parent.type == "Playlist" &&
                   !FinampSettingsHelper.finampSettings.isOffline)
                 PlaylistNameEditButton(playlist: widget.parent),
-              FavoriteButton(item: widget.parent),
-              if (GetIt.instance<DownloadsHelper>().isAlbumDownloaded(widget.parent.id))
+              if (widget.parent.type != "Folder")
+                FavoriteButton(item: widget.parent),
+              if (widget.parent.type != "Folder" &&
+                  GetIt.instance<DownloadsHelper>().isAlbumDownloaded(widget.parent.id))
                 DeleteButton(parent: widget.parent, items: widget.children),
-              if (!FinampSettingsHelper.finampSettings.isOffline)
+              if (widget.parent.type != "Folder" &&
+                  !FinampSettingsHelper.finampSettings.isOffline)
                 SyncAlbumOrPlaylistButton(parent: widget.parent, items: widget.children)
             ],
           ),
@@ -105,7 +117,7 @@ class _AlbumScreenContentState extends State<AlbumScreenContent> {
                 ),
                 sliver: SongsSliverList(
                   childrenForList: childrenOfThisDisc,
-                  childrenForQueue: widget.children,
+                  childrenForQueue: audioChildren,
                   parent: widget.parent,
                   onDelete: onDelete,
                 ),
@@ -113,7 +125,7 @@ class _AlbumScreenContentState extends State<AlbumScreenContent> {
           else if (widget.children.isNotEmpty)
             SongsSliverList(
               childrenForList: widget.children,
-              childrenForQueue: widget.children,
+              childrenForQueue: audioChildren,
               parent: widget.parent,
               onDelete: onDelete,
             ),
@@ -152,16 +164,15 @@ class _SongsSliverListState extends State<SongsSliverList> {
 
   @override
   Widget build(BuildContext context) {
-    // When user selects song from disc other than first, index number is
-    // incorrect and song with the same index on first disc is played instead.
-    // Adding this offset ensures playback starts for nth song on correct disc.
-    final int indexOffset =
-        widget.childrenForQueue.indexOf(widget.childrenForList[0]);
-
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (BuildContext context, int index) {
           final BaseItemDto item = widget.childrenForList[index];
+
+          // Folder items drill deeper into the directory hierarchy.
+          if (item.type == "Folder") {
+            return AlbumItem(album: item, isGrid: false);
+          }
 
           BaseItemDto removeItem() {
             late BaseItemDto item;
@@ -173,10 +184,13 @@ class _SongsSliverListState extends State<SongsSliverList> {
             return item;
           }
 
+          // Audio item: find its position in the queue for correct playback.
+          final queueIndex = widget.childrenForQueue.indexOf(item);
+
           return SongListTile(
             item: item,
             children: widget.childrenForQueue,
-            index: index + indexOffset,
+            index: queueIndex >= 0 ? queueIndex : 0,
             parentId: widget.parent.id,
             onDelete: () {
               final item = removeItem();

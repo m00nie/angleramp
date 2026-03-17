@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:get_it/get_it.dart';
 
 import '../components/ViewSelector/no_music_libraries_message.dart';
+import '../models/finamp_models.dart';
+import '../services/finamp_settings_helper.dart';
 import '../services/finamp_user_helper.dart';
 import 'music_screen.dart';
 import '../services/jellyfin_api_helper.dart';
@@ -37,12 +39,12 @@ class _ViewSelectorState extends State<ViewSelector> {
       future: viewListFuture,
       builder: (context, snapshot) {
         if (snapshot.hasData) {
-          // Finamp only supports music libraries. We used to allow people to
-          // select unsupported libraries, but some people selected "general"
-          // libraries and thought Finamp was broken.
+          // Finamp supports music and audiobook (books) libraries.
+          // Show the no-libraries message only if neither type is available.
           if (snapshot.data!.isEmpty ||
-              !snapshot.data!
-                  .any((element) => element.collectionType == "music")) {
+              !snapshot.data!.any((element) =>
+                  element.collectionType == "music" ||
+                  element.collectionType == "books")) {
             return NoMusicLibrariesMessage(
               onRefresh: () {
                 setState(() {
@@ -54,8 +56,12 @@ class _ViewSelectorState extends State<ViewSelector> {
           }
 
           if (_views.isEmpty) {
+            // Only show music and books libraries; other types (movies, TV, etc.)
+            // are not supported by Finamp.
             _views.addEntries(snapshot.data!
-                .where((element) => element.collectionType != "playlists")
+                .where((element) =>
+                    element.collectionType == "music" ||
+                    element.collectionType == "books")
                 .map((e) => MapEntry(e, e.collectionType == "music")));
 
             // If only one music library is available and user doesn't have a
@@ -89,9 +95,15 @@ class _ViewSelectorState extends State<ViewSelector> {
 
                   return CheckboxListTile(
                     value: isSelected,
-                    enabled: view.collectionType == "music",
+                    // Music and books libraries are both selectable;
+                    // music for the main library, books for audiobooks.
+                    enabled: view.collectionType == "music" ||
+                        view.collectionType == "books",
                     title: Text(_views.keys.elementAt(index).name ??
                         AppLocalizations.of(context)!.unknownName),
+                    subtitle: view.collectionType == "books"
+                        ? Text(AppLocalizations.of(context)!.audiobooks)
+                        : null,
                     onChanged: (value) {
                       setState(() {
                         _views[_views.keys.elementAt(index)] = value!;
@@ -128,10 +140,21 @@ class _ViewSelectorState extends State<ViewSelector> {
       return;
     } else {
       try {
-        _finampUserHelper.setCurrentUserViews(_views.entries
+        final selectedViews = _views.entries
             .where((element) => element.value == true)
             .map((e) => e.key)
-            .toList());
+            .toList();
+
+        _finampUserHelper.setCurrentUserViews(selectedViews);
+
+        // Auto-enable the audiobooks tab when a books library is selected,
+        // and disable it when none are selected. This keeps audiobook
+        // visibility in sync with the user's library choice.
+        final hasBooksLibrary =
+            selectedViews.any((v) => v.collectionType == "books");
+        FinampSettingsHelper.setShowTab(
+            TabContentType.audiobooks, hasBooksLibrary);
+
         // allow navigation to music screen while selector is being built
         Future.microtask(() => Navigator.of(context)
             .pushNamedAndRemoveUntil(MusicScreen.routeName, (route) => false));

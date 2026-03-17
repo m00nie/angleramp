@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 
 import '../models/jellyfin_models.dart';
 import 'process_artist.dart';
@@ -19,6 +19,13 @@ String? generateSubtitle(
       return item.albumArtists != null && item.albumArtists!.isNotEmpty && (item.albumArtists!.length > 1 || item.albumArtists?.first.name != item.albumArtist) ? item.albumArtists?.map((e) => processArtist(e.name, context)).join(", ") : processArtist(item.albumArtist, context);
     case "Playlist":
       return AppLocalizations.of(context)!.songCount(item.childCount!);
+    case "Book":
+      // Show the narrator (stored in artists) and the year for audiobooks.
+      final narrator = item.artists?.join(", ") ?? item.albumArtist;
+      if (narrator != null && narrator.isNotEmpty) {
+        return narrator;
+      }
+      return item.productionYearString;
     // case "MusicGenre":
     // case "MusicArtist":
     //   return Text("${item.albumCount} Albums");

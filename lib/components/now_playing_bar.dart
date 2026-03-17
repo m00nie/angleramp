@@ -49,7 +49,8 @@ class NowPlayingBar extends StatelessWidget {
                 child: SafeArea(
                   child: SizedBox(
                     width: MediaQuery.of(context).size.width,
-                    child: Stack(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         const ProgressSlider(
                           allowSeeking: false,

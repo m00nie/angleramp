@@ -106,6 +106,7 @@ final class _$JellyfinApi extends JellyfinApi {
     String? filters,
     int? startIndex,
     int? limit,
+    String? mediaTypes,
   }) async {
     final Uri $url = Uri.parse('/Users/${userId}/Items');
     final Map<String, dynamic> $params = <String, dynamic>{
@@ -123,6 +124,7 @@ final class _$JellyfinApi extends JellyfinApi {
       'Filters': filters,
       'StartIndex': startIndex,
       'Limit': limit,
+      'MediaTypes': mediaTypes,
     };
     final Request $request = Request(
       'GET',

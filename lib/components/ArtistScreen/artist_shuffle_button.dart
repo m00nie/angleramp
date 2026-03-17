@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 
 
 import '../../models/jellyfin_models.dart';
@@ -67,32 +67,35 @@ class _ArtistShuffleButtonState extends State<ArtistShuffleButton> {
           } else {
             artistShuffleButtonFuture ??= _jellyfinApiHelper.getItems(
               parentItem: widget.artist,
-              includeItemTypes: "Audio",
+              includeItemTypes: 'Audio',
               sortBy: 'PremiereDate,Album,SortName',
               isGenres: false,
             );
 
             return FutureBuilder<List<BaseItemDto>?>(
-            future: artistShuffleButtonFuture,
-            builder: (context, snapshot) {
-              if (snapshot.hasData){
-                final List<BaseItemDto> items = snapshot.data!;
-
-                return IconButton(
-                  tooltip: AppLocalizations.of(context)!
-                      .shuffleArtist(widget.artist.name ?? "Unknown Artist"),
-                  onPressed: () async {
-                    await _audioServiceHelper
-                           .replaceQueueWithItem(itemList: items, shuffle: true, initialIndex: Random().nextInt(items.length));
-                  }, 
-                  icon: const Icon(Icons.shuffle),
+              future: artistShuffleButtonFuture,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  final List<BaseItemDto> items = snapshot.data!;
+                  if (items.isEmpty) return _disabledButton;
+                  return IconButton(
+                    tooltip: AppLocalizations.of(context)!
+                        .shuffleArtist(widget.artist.name ?? 'Unknown Artist'),
+                    onPressed: () async {
+                      await _audioServiceHelper.replaceQueueWithItem(
+                        itemList: items,
+                        shuffle: true,
+                        initialIndex: Random().nextInt(items.length),
+                      );
+                    },
+                    icon: const Icon(Icons.shuffle),
                   );
-              } else {
-                return _disabledButton;
-              }
-            },
-          );
-         }
+                } else {
+                  return _disabledButton;
+                }
+              },
+            );
+          }
         },
       );
     }

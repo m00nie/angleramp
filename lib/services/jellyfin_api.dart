@@ -14,7 +14,7 @@ import 'jellyfin_api_helper.dart';
 part 'jellyfin_api.chopper.dart';
 
 const String defaultFields =
-    "ChildCount,DateCreated,DateLastMediaAdded,Etag,Genres,ParentId,ProviderIds,Tags";
+    "ChildCount,DateCreated,DateLastMediaAdded,Etag,Genres,ParentId,Path,ProviderIds,Tags";
 
 @ChopperApi()
 abstract class JellyfinApi extends ChopperService {
@@ -130,6 +130,10 @@ abstract class JellyfinApi extends ChopperService {
 
     /// Optional. The maximum number of records to return.
     @Query("Limit") int? limit,
+
+    /// Optional. Filter based on a specific MediaType. Comma delimited.
+    /// Use "Audio" to return only audio items (excludes ebooks from Book results).
+    @Query("MediaTypes") String? mediaTypes,
   });
 
   @FactoryConverter(

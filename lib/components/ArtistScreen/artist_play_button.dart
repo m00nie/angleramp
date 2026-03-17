@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 
 
 import '../../models/jellyfin_models.dart';
@@ -77,33 +77,33 @@ class _ArtistPlayButtonState extends State<ArtistPlayButton> {
               );
           } else {
             artistPlayButtonFuture ??= _jellyfinApiHelper.getItems(
-            parentItem: widget.artist,
-            includeItemTypes: "Audio",
-            sortBy: 'PremiereDate,Album,SortName',
-            isGenres: false,
+              parentItem: widget.artist,
+              includeItemTypes: 'Audio',
+              sortBy: 'PremiereDate,Album,SortName',
+              isGenres: false,
             );
 
             return FutureBuilder<List<BaseItemDto>?>(
-            future: artistPlayButtonFuture,
-            builder: (context, snapshot) {
-              if (snapshot.hasData){
-                final List<BaseItemDto> items = snapshot.data!;
-
-                return IconButton(
-                  tooltip: AppLocalizations.of(context)!
-                      .playArtist(widget.artist.name ?? "Unknown Artist"),
-                  onPressed: () async {
-                    await _audioServiceHelper
-                           .replaceQueueWithItem(itemList: items);
-                  }, 
-                  icon: const Icon(Icons.play_arrow),
+              future: artistPlayButtonFuture,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  final List<BaseItemDto> items = snapshot.data!;
+                  if (items.isEmpty) return _disabledButton;
+                  return IconButton(
+                    tooltip: AppLocalizations.of(context)!
+                        .playArtist(widget.artist.name ?? 'Unknown Artist'),
+                    onPressed: () async {
+                      await _audioServiceHelper
+                          .replaceQueueWithItem(itemList: items);
+                    },
+                    icon: const Icon(Icons.play_arrow),
                   );
-              } else {
-                return _disabledButton;
-              }
-            },
-          );
-         }
+                } else {
+                  return _disabledButton;
+                }
+              },
+            );
+          }
         },
       );
     }

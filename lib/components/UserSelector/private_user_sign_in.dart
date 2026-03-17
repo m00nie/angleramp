@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get_it/get_it.dart';
 
 import '../../screens/logs_screen.dart';
@@ -39,6 +40,43 @@ class _PrivateUserSignInState extends State<PrivateUserSignIn> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // ── AnglerAmp logo & wordmark ───────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 32.0),
+                    child: Column(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/icon/angleramp_icon.svg',
+                          width: 120,
+                          height: 120,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'AnglerAmp',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                color: const Color(0xFF34D399),
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 2.0,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'your music (and books!), your way',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: const Color(0xFF94A3B8),
+                                letterSpacing: 1.2,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ── Server URL field ────────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: TextFormField(

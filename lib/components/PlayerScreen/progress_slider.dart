@@ -5,6 +5,11 @@ import '../../services/music_player_background_task.dart';
 import '../../services/progress_state_stream.dart';
 import '../print_duration.dart';
 
+// Brand green — matches trading-game palette
+const _kTrackActive   = Color(0xFF34D399);
+const _kTrackInactive = Color(0xFF17243E);
+const _kTrackBuffer   = Color(0xFF1E3054);
+
 class ProgressSlider extends StatefulWidget {
   const ProgressSlider({
     Key? key,
@@ -23,22 +28,46 @@ class ProgressSlider extends StatefulWidget {
   State<ProgressSlider> createState() => _ProgressSliderState();
 }
 
-class _ProgressSliderState extends State<ProgressSlider> {
+class _ProgressSliderState extends State<ProgressSlider>
+    with SingleTickerProviderStateMixin {
   /// Value used to hold the slider's value when dragging.
   double? _dragValue;
 
   late SliderThemeData _sliderThemeData;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   final _audioHandler = GetIt.instance<MusicPlayerBackgroundTask>();
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnimation = CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
     _sliderThemeData = SliderTheme.of(context).copyWith(
-      trackHeight: 4.0,
-      inactiveTrackColor:
-          Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+      trackHeight: 3.0,
+      activeTrackColor: _kTrackActive,
+      inactiveTrackColor: _kTrackInactive,
+      secondaryActiveTrackColor: _kTrackBuffer,
+      thumbColor: _kTrackActive,
     );
   }
 
@@ -109,20 +138,22 @@ class _ProgressSliderState extends State<ProgressSlider> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Slider displaying playback and buffering progress.
-                  SliderTheme(
-                    data: widget.allowSeeking
-                        ? _sliderThemeData.copyWith(
-                            trackShape: CustomTrackShape(),
-                          )
-                        : _sliderThemeData.copyWith(
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 0),
-                            // gets rid of both horizontal and vertical padding
-                            overlayShape:
-                                const RoundSliderOverlayShape(overlayRadius: 0),
-                            trackShape: const RectangularSliderTrackShape(),
+                  // For the full player we wrap in AnimatedBuilder so the
+                  // glowing dot thumb repaints on every pulse animation tick.
+                  if (widget.allowSeeking)
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, _) => SliderTheme(
+                        data: _sliderThemeData.copyWith(
+                          trackShape: CustomTrackShape(),
+                          thumbShape: _GlowingDotThumbShape(
+                            pulse: _pulseAnimation.value,
                           ),
-                    child: Slider(
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 16,
+                          ),
+                        ),
+                        child: Slider(
                       min: 0.0,
                       max: snapshot.data!.mediaItem?.duration == null
                           ? snapshot.data!.playbackState.bufferedPosition
@@ -184,6 +215,33 @@ class _ProgressSliderState extends State<ProgressSlider> {
                           : (_) {},
                     ),
                   ),
+                    )
+                  else
+                    // Mini now-playing bar: custom-painted track + full-size
+                    // glowing dot in exactly 28 px, so it sits cleanly above
+                    // the album art without overlap.
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, _) {
+                        final duration = snapshot.data!.mediaItem?.duration
+                                ?.inMicroseconds
+                                .toDouble() ??
+                            0.0;
+                        final position = snapshot.data!.position.inMicroseconds
+                            .toDouble()
+                            .clamp(0.0, duration > 0 ? duration : 1.0);
+                        return SizedBox(
+                          height: 28.0,
+                          width: double.infinity,
+                          child: CustomPaint(
+                            painter: _MiniProgressPainter(
+                              value: duration > 0 ? position / duration : 0.0,
+                              pulse: _pulseAnimation.value,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   if (widget.showDuration)
                     Row(
                       mainAxisSize: MainAxisSize.max,
@@ -285,4 +343,135 @@ class CustomTrackShape extends RoundedRectSliderTrackShape {
       additionalActiveTrackHeight: additionalActiveTrackHeight,
     );
   }
+}
+
+/// A custom slider thumb that renders the 4-layer glowing dot from the
+/// trading-game-mobile app. The [pulse] value (0.0–1.0) drives the outer
+/// halo's expanding radius and opacity, producing a live heartbeat effect.
+class _GlowingDotThumbShape extends SliderComponentShape {
+  const _GlowingDotThumbShape({required this.pulse, this.scale = 1.0});
+
+  /// Animated value in [0.0, 1.0] driven by a CurvedAnimation.
+  final double pulse;
+
+  /// Scale factor: 1.0 = full-size player, <1.0 = mini bar.
+  final double scale;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      Size(28.0 * scale, 28.0 * scale);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final canvas = context.canvas;
+    final color = sliderTheme.activeTrackColor ?? _kTrackActive;
+    final s = scale;
+
+    // Layer 1: Outer expanding glow ring (pulses radius 10→14 px, opacity 7→15%)
+    canvas.drawCircle(
+      center,
+      (10.0 + 4.0 * pulse) * s,
+      Paint()
+        ..color = color.withOpacity(0.07 + 0.08 * pulse)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Layer 2: Inner static halo
+    canvas.drawCircle(
+      center,
+      6.5 * s,
+      Paint()
+        ..color = color.withOpacity(0.22)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Layer 3: Solid filled dot
+    canvas.drawCircle(
+      center,
+      4.0 * s,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.fill,
+    );
+
+    // Layer 4: White centre highlight for depth
+    canvas.drawCircle(
+      center,
+      1.5 * s,
+      Paint()
+        ..color = Colors.white.withOpacity(0.9)
+        ..style = PaintingStyle.fill,
+    );
+  }
+}
+
+/// Draws the mini now-playing-bar progress track + full-size glowing dot
+/// inside a fixed 28 px height. Avoids the Flutter Slider's 48 px minimum
+/// touch-target height so the bar sits cleanly above the ListTile.
+class _MiniProgressPainter extends CustomPainter {
+  const _MiniProgressPainter({required this.value, required this.pulse});
+
+  final double value; // 0.0 – 1.0
+  final double pulse; // CurvedAnimation value
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0) return;
+    final cy = size.height / 2;
+    final dotX = (value.clamp(0.0, 1.0) * size.width).clamp(0.0, size.width);
+
+    // Inactive (full-width) track
+    canvas.drawRRect(
+      RRect.fromLTRBR(
+          0, cy - 1.5, size.width, cy + 1.5, const Radius.circular(1.5)),
+      Paint()..color = _kTrackInactive,
+    );
+    // Active portion
+    if (dotX > 0) {
+      canvas.drawRRect(
+        RRect.fromLTRBR(
+            0, cy - 1.5, dotX, cy + 1.5, const Radius.circular(1.5)),
+        Paint()..color = _kTrackActive,
+      );
+    }
+    // Glowing dot — same 4-layer design as _GlowingDotThumbShape
+    final center = Offset(dotX, cy);
+    canvas.drawCircle(
+        center, 10.0 + 4.0 * pulse,
+        Paint()
+          ..color = _kTrackActive.withOpacity(0.07 + 0.08 * pulse)
+          ..style = PaintingStyle.fill);
+    canvas.drawCircle(
+        center, 6.5,
+        Paint()
+          ..color = _kTrackActive.withOpacity(0.22)
+          ..style = PaintingStyle.fill);
+    canvas.drawCircle(
+        center, 4.0,
+        Paint()
+          ..color = _kTrackActive
+          ..style = PaintingStyle.fill);
+    canvas.drawCircle(
+        center, 1.5,
+        Paint()
+          ..color = Colors.white.withOpacity(0.9)
+          ..style = PaintingStyle.fill);
+  }
+
+  @override
+  bool shouldRepaint(_MiniProgressPainter old) =>
+      old.value != value || old.pulse != pulse;
 }

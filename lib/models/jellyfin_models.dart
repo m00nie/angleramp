@@ -9,7 +9,7 @@
 
 import 'package:finamp/models/finamp_models.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:hive/hive.dart';
 import 'package:json_annotation/json_annotation.dart';
 
@@ -3373,6 +3373,8 @@ enum SortBy {
         return _jellyfinNameMusicAlbums(this);
       case TabContentType.songs:
         return _jellyfinNameSongs(this);
+      case TabContentType.audiobooks:
+        return _jellyfinNameMusicAlbums(this);
       default:
         return _jellyfinName(this);
     }

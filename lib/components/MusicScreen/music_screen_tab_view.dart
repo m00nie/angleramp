@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:finamp/components/MusicScreen/artist_item_list_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
@@ -81,8 +82,6 @@ class _MusicScreenTabViewState extends State<MusicScreenTabView>
       final sortOrder =
           widget.sortOrder?.toString() ?? SortOrder.ascending.toString();
       final newItems = await _jellyfinApiHelper.getItems(
-        // starting with Jellyfin 10.9, only automatically created playlists will have a specific library as parent. user-created playlists will not be returned anymore
-        // this condition fixes this by not providing a parentId when fetching playlists
         parentItem: widget.tabContentType == TabContentType.playlists
             ? null
             : widget.parentItem ??
@@ -270,6 +269,23 @@ class _MusicScreenTabViewState extends State<MusicScreenTabView>
                     ),
                     const Padding(padding: EdgeInsets.all(8.0)),
                     const Text("Offline artists view hasn't been implemented")
+                  ],
+                ),
+              );
+            }
+
+            if (widget.tabContentType == TabContentType.audiobooks) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.cloud_off,
+                      size: 64,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                    const Padding(padding: EdgeInsets.all(8.0)),
+                    Text(AppLocalizations.of(context)!.notAvailableInOfflineMode)
                   ],
                 ),
               );
@@ -592,8 +608,12 @@ String _includeItemTypes(TabContentType tabContentType) {
       return "MusicGenre";
     case TabContentType.playlists:
       return "Playlist";
-    default:
-      throw const FormatException("Unsupported TabContentType");
+    case TabContentType.audiobooks:
+      // AudioBook is Jellyfin's dedicated container type for audiobooks.
+      // It is distinct from Book (ebook containers) and Audio (music leaf files).
+      return "AudioBook";
+    case TabContentType.folders:
+      return "Folder";
   }
 }
 

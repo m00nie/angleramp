@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 
 import '../models/jellyfin_models.dart';
 import '../models/finamp_models.dart';
+import '../services/finamp_user_helper.dart';
 import '../components/ArtistScreen/artist_download_button.dart';
 import '../components/MusicScreen/music_screen_tab_view.dart';
 import '../components/now_playing_bar.dart';
@@ -22,6 +24,10 @@ class ArtistScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final finampUserHelper = GetIt.instance<FinampUserHelper>();
+    final isAudiobookContext =
+        finampUserHelper.currentUser?.currentView?.collectionType == "books";
+
     final BaseItemDto artist = widgetArtist ??
         ModalRoute.of(context)!.settings.arguments as BaseItemDto;
 
@@ -37,7 +43,9 @@ class ArtistScreen extends StatelessWidget {
         ],
       ),
       body: MusicScreenTabView(
-        tabContentType: TabContentType.albums,
+        // For audiobook authors, show their books (Book type) instead of albums
+        tabContentType:
+            isAudiobookContext ? TabContentType.audiobooks : TabContentType.albums,
         parentItem: artist,
         isFavourite: false,
         sortBy: SortBy.premiereDate,

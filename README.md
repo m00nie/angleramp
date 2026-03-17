@@ -1,6 +1,31 @@
-![Banner](./GitHub_Banner.png)
+# AnglerAmp
 
-## Hacktoberfest
+A personal fork of [Finamp](https://github.com/jmshrv/finamp) — the excellent and must more reliable/better/original open-source Jellyfin music player for Android and iOS.
+
+**All credit belongs to jmshrv and the Finamp contributors.** This fork adds a small number of personal improvements on top of their great work I find useful myself. If you want a well-maintained, polished Jellyfin music client, please use [Finamp](https://github.com/jmshrv/finamp) instead.
+
+---
+
+## What's different from Finamp
+
+| Feature | Description |
+|---|---|
+| **Basic audiobook support** | Browse and play audiobooks stored in your Jellyfin library (I listen to lots of books and music) |
+| **Basic CarPlay support** | Control playback from your car's screen via CarPlay (in the car :D) |
+| **Browse audio by directory** | Navigate your music by folder path — handy when your metadata tags are poorly managed (like mine) |
+| **Different theme** | A dark navy colour scheme with emerald-green accents, gentler on my sensitive eyes |
+
+---
+
+## Bundle ID
+
+AnglerAmp uses the bundle ID `com.moonie.angleramp`, so it installs alongside Finamp without conflict (plus you should really be using Finamp anyway)
+
+---
+
+## Original README
+
+
 
 Ever thought about contributing to Finamp or Open Source in general?
 Now is the time! It's Hacktober afterall!

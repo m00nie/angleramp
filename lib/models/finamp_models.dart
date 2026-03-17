@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:hive/hive.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:path/path.dart' as path_helper;
@@ -200,9 +200,11 @@ class FinampSettings {
     return FinampSettings(
       downloadLocations: [],
       // Create a map of TabContentType from TabContentType's values.
+      // Audiobooks tab is disabled by default since not all Jellyfin users
+      // have a Book/audiobook library. Users can enable it in Tabs settings.
       showTabs: Map.fromEntries(
         TabContentType.values.map(
-          (e) => MapEntry(e, true),
+          (e) => MapEntry(e, e != TabContentType.audiobooks),
         ),
       ),
       downloadLocationsMap: {downloadLocation.id: downloadLocation},
@@ -315,7 +317,11 @@ enum TabContentType {
   @HiveField(3)
   genres,
   @HiveField(4)
-  songs;
+  songs,
+  @HiveField(5)
+  audiobooks,
+  @HiveField(6)
+  folders;
 
   /// Human-readable version of the [TabContentType]. For example, toString() on
   /// [TabContentType.songs], toString() would return "TabContentType.songs".
@@ -339,6 +345,10 @@ enum TabContentType {
         return "Genres";
       case TabContentType.playlists:
         return "Playlists";
+      case TabContentType.audiobooks:
+        return "Audiobooks";
+      case TabContentType.folders:
+        return "Folders";
     }
   }
 
@@ -355,6 +365,10 @@ enum TabContentType {
         return AppLocalizations.of(context)!.genres;
       case TabContentType.playlists:
         return AppLocalizations.of(context)!.playlists;
+      case TabContentType.audiobooks:
+        return AppLocalizations.of(context)!.audiobooks;
+      case TabContentType.folders:
+        return AppLocalizations.of(context)!.folders;
     }
   }
 }

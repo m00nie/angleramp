@@ -41,7 +41,11 @@ class FinampUserHelper {
 
     currentUserTemp.views = Map<String, BaseItemDto>.fromEntries(
         newViews.map((e) => MapEntry(e.id, e)));
-    currentUserTemp.currentViewId = currentUserTemp.views.keys.first;
+    // Prefer a music library as the active view so that music/album/artist
+    // tabs continue to work when only books libraries are also selected.
+    final firstMusicView = newViews.where((v) => v.collectionType == "music");
+    currentUserTemp.currentViewId =
+        (firstMusicView.isEmpty ? newViews.first : firstMusicView.first).id;
 
     _finampUserBox.put(currentUserId, currentUserTemp);
   }

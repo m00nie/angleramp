@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
 
@@ -58,8 +58,12 @@ class _AlbumScreenState extends State<AlbumScreen> {
           } else {
             albumScreenContentFuture ??= jellyfinApiHelper.getItems(
               parentItem: parent,
-              sortBy: "ParentIndexNumber,IndexNumber,SortName",
-              includeItemTypes: "Audio",
+              sortBy: parent.type == "Folder"
+                  ? "SortName"
+                  : "ParentIndexNumber,IndexNumber,SortName",
+              // For Folder parents we fetch sub-folders + direct audio so the
+              // user can drill down through the directory hierarchy.
+              includeItemTypes: parent.type == "Folder" ? null : "Audio",
               isGenres: false,
             );
 

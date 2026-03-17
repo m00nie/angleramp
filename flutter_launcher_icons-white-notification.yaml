@@ -2,3 +2,12 @@ flutter_icons:
   android: true
   ios: false
   image_path: "assets/icon/icon_white_noborder.png"
+
+# AnglerAmp main icon (langoustine on dark navy)
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/icon/angleramp_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#03070F"
+  adaptive_icon_foreground: "assets/icon/angleramp_icon.png"

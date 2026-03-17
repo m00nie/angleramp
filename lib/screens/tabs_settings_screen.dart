@@ -1,8 +1,9 @@
 import 'package:finamp/services/finamp_settings_helper.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 
 import '../components/TabsSettingsScreen/hide_tab_toggle.dart';
+import '../models/finamp_models.dart';
 
 class TabsSettingsScreen extends StatefulWidget {
   const TabsSettingsScreen({Key? key}) : super(key: key);
@@ -32,36 +33,34 @@ class _TabsSettingsScreenState extends State<TabsSettingsScreen> {
         ],
       ),
       body: Scrollbar(
-        child: ReorderableListView.builder(
-          // buildDefaultDragHandles: false,
-          itemCount: FinampSettingsHelper.finampSettings.tabOrder.length,
-          itemBuilder: (context, index) {
-            return HideTabToggle(
-              tabContentType:
-                  FinampSettingsHelper.finampSettings.tabOrder[index],
-              key:
-                  ValueKey(FinampSettingsHelper.finampSettings.tabOrder[index]),
+        child: Builder(
+          builder: (context) {
+            // Audiobooks tab visibility is now controlled by library selection,
+            // not a manual toggle, so hide it from this settings screen.
+            final tabOrder = FinampSettingsHelper.finampSettings.tabOrder
+                .where((t) => t != TabContentType.audiobooks)
+                .toList();
+            return ReorderableListView.builder(
+              itemCount: tabOrder.length,
+              itemBuilder: (context, index) {
+                return HideTabToggle(
+                  tabContentType: tabOrder[index],
+                  key: ValueKey(tabOrder[index]),
+                );
+              },
+              onReorder: (oldIndex, newIndex) {
+                setState(() {
+                  if (oldIndex < newIndex) newIndex -= 1;
+                  final allTabs = FinampSettingsHelper.finampSettings.tabOrder;
+                  final oldValue = tabOrder[oldIndex];
+                  final newValue = tabOrder[newIndex];
+                  final actualOld = allTabs.indexOf(oldValue);
+                  final actualNew = allTabs.indexOf(newValue);
+                  FinampSettingsHelper.setTabOrder(actualOld, newValue);
+                  FinampSettingsHelper.setTabOrder(actualNew, oldValue);
+                });
+              },
             );
-          },
-          onReorder: (oldIndex, newIndex) {
-            // It's a bit of a hack to call setState with no actual widget
-            // state, but it saves us from using listeners
-            setState(() {
-              // For some weird reason newIndex is one above what it should be
-              // when oldIndex is lower. This if statement is in Flutter's
-              // ReorderableListView documentation.
-              if (oldIndex < newIndex) {
-                newIndex -= 1;
-              }
-
-              final oldValue =
-                  FinampSettingsHelper.finampSettings.tabOrder[oldIndex];
-              final newValue =
-                  FinampSettingsHelper.finampSettings.tabOrder[newIndex];
-
-              FinampSettingsHelper.setTabOrder(oldIndex, newValue);
-              FinampSettingsHelper.setTabOrder(newIndex, oldValue);
-            });
           },
         ),
       ),
