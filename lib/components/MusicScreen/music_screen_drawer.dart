@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get_it/get_it.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -24,16 +25,21 @@ class MusicScreenDrawer extends StatelessWidget {
               delegate: SliverChildListDelegate.fixed(
                 [
                   DrawerHeader(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF080F1E), Color(0xFF0F182E)],
+                        ),
+                      ),
                       child: Stack(
                     children: [
-                      const Align(
+                      Align(
                         alignment: Alignment.topCenter,
-                        child: CircleAvatar(
-                          backgroundColor: Colors.transparent,
-                          backgroundImage: AssetImage(
-                            'images/finamp.png',
-                          ),
-                          radius: 50.0,
+                        child: SvgPicture.asset(
+                          'assets/icon/angleramp_icon.svg',
+                          width: 96,
+                          height: 96,
                         ),
                       ),
                       Align(
@@ -41,7 +47,12 @@ class MusicScreenDrawer extends StatelessWidget {
                               Alignment.bottomCenter - const Alignment(0, 0.2),
                           child: Text(
                             AppLocalizations.of(context)!.finamp,
-                            style: const TextStyle(fontSize: 20),
+                            style: const TextStyle(
+                              fontSize: 20,
+                              color: Color(0xFF34D399),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 2.0,
+                            ),
                           )),
                     ],
                   )),

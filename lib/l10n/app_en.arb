@@ -35,7 +35,7 @@
   "@logs": {},
   "next": "Next",
   "@next": {},
-  "selectMusicLibraries": "Select Music Libraries",
+  "selectMusicLibraries": "Select Audio Libraries",
   "@selectMusicLibraries": {
     "description": "App bar title for library select screen"
   },
@@ -55,6 +55,28 @@
   "@genres": {},
   "playlists": "Playlists",
   "@playlists": {},
+  "audiobooks": "Audiobooks",
+  "@audiobooks": {},
+  "folders": "Folders",
+  "@folders": {},
+  "audiobookChapters": "Chapters",
+  "@audiobookChapters": {},
+  "audiobookChapterCount": "{count,plural,=1{{count} Chapter} other{{count} Chapters}}",
+  "@audiobookChapterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "audiobookNarrator": "Narrator",
+  "@audiobookNarrator": {},
+  "resumeAudiobook": "Resume",
+  "@resumeAudiobook": {},
+  "playFromBeginning": "Play from Beginning",
+  "@playFromBeginning": {},
+  "audiobookDescription": "Description",
+  "@audiobookDescription": {},
   "startMix": "Start Mix",
   "@startMix": {},
   "startMixNoSongsArtist": "Long-press an artist to add or remove it from the mix builder before starting a mix",
@@ -73,7 +95,7 @@
   "@favourites": {},
   "shuffleAll": "Shuffle all",
   "@shuffleAll": {},
-  "finamp": "Finamp",
+  "finamp": "AnglerAmp",
   "@finamp": {},
   "downloads": "Downloads",
   "@downloads": {},
@@ -521,11 +543,11 @@
   "confirm": "Confirm",
   "showUncensoredLogMessage": "This log contains your login information. Show?",
   "resetTabs": "Reset tabs",
-  "noMusicLibrariesTitle": "No Music Libraries",
+  "noMusicLibrariesTitle": "No Audio Libraries Found",
   "@noMusicLibrariesTitle": {
-    "description": "Title for message that shows on the views screen when no music libraries could be found."
+    "description": "Title for message that shows on the views screen when no supported libraries could be found."
   },
-  "noMusicLibrariesBody": "Finamp could not find any music libraries. Please ensure that your Jellyfin server contains at least one library with the content type set to \"Music\".",
+  "noMusicLibrariesBody": "AnglerAmp could not find any compatible libraries. Please ensure your Jellyfin server has at least one library with content type \"Music\" or \"Books\".",
   "refresh": "REFRESH",
   "swipeInsertQueueNext": "Play Swiped Song Next",
   "@swipeInsertQueueNext": {},
@@ -582,6 +604,6 @@
   "@download": {},
   "sync": "Synchronize with Server",
   "@sync": {},
-  "about": "About Finamp",
+  "about": "About AnglerAmp",
   "@about": {}
 }

@@ -12,7 +12,7 @@ import 'package:finamp/services/offline_listen_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
@@ -29,9 +29,11 @@ import 'screens/add_to_playlist_screen.dart';
 import 'screens/album_screen.dart';
 import 'screens/artist_screen.dart';
 import 'screens/audio_service_settings_screen.dart';
+import 'screens/audiobook_screen.dart';
 import 'screens/downloads_error_screen.dart';
 import 'screens/downloads_screen.dart';
 import 'screens/downloads_settings_screen.dart';
+import 'screens/about_screen.dart';
 import 'screens/language_selection_screen.dart';
 import 'screens/layout_settings_screen.dart';
 import 'screens/logs_screen.dart';
@@ -44,6 +46,7 @@ import 'screens/transcoding_settings_screen.dart';
 import 'screens/user_selector.dart';
 import 'screens/view_selector.dart';
 import 'services/audio_service_helper.dart';
+import 'services/carplay_service.dart';
 import 'services/download_update_stream.dart';
 import 'services/downloads_helper.dart';
 import 'services/jellyfin_api_helper.dart';
@@ -60,12 +63,14 @@ void main() async {
     await setupHive();
     _migrateDownloadLocations();
     _migrateSortOptions();
+    _backfillTabSettings();
     _setupFinampUserHelper();
     _setupJellyfinApiData();
     _setupOfflineListenLogHelper();
     await _setupDownloader();
     await _setupDownloadsHelper();
     await _setupAudioServiceHelper();
+    _setupCarPlayService();
   } catch (e) {
     hasFailed = true;
     runApp(FinampErrorApp(
@@ -92,6 +97,11 @@ void main() async {
 
 void _setupJellyfinApiData() {
   GetIt.instance.registerSingleton(JellyfinApiHelper());
+}
+
+void _setupCarPlayService() {
+  GetIt.instance.registerSingleton(CarPlayService());
+  GetIt.instance<CarPlayService>().initialize();
 }
 
 void _setupOfflineListenLogHelper() {
@@ -197,9 +207,12 @@ Future<void> setupHive() async {
     finampSettingsBox.put("FinampSettings", await FinampSettings.create());
   }
 
-  // If no ThemeMode is set, we set it to the default (system)
+  // Default to dark mode. Also migrate any existing "system" setting to dark
+  // so the deep-navy palette is always used.
   Box<ThemeMode> themeModeBox = Hive.box("ThemeMode");
-  if (themeModeBox.isEmpty) ThemeModeHelper.setThemeMode(ThemeMode.system);
+  if (themeModeBox.isEmpty || themeModeBox.get("ThemeMode") == ThemeMode.system) {
+    ThemeModeHelper.setThemeMode(ThemeMode.dark);
+  }
 }
 
 Future<void> _setupAudioServiceHelper() async {
@@ -275,6 +288,31 @@ void _migrateSortOptions() {
   }
 }
 
+/// Ensures any TabContentType values added after the user's settings were first
+/// persisted appear in tabOrder and showTabs. Without this, new tabs (e.g.
+/// folders) are invisible to existing users whose stored list predates the enum
+/// value.
+void _backfillTabSettings() {
+  final finampSettings = FinampSettingsHelper.finampSettings;
+  var changed = false;
+
+  for (final tab in TabContentType.values) {
+    if (!finampSettings.tabOrder.contains(tab)) {
+      finampSettings.tabOrder.add(tab);
+      changed = true;
+    }
+    if (!finampSettings.showTabs.containsKey(tab)) {
+      // audiobooks is hidden by default; everything else is shown.
+      finampSettings.showTabs[tab] = tab != TabContentType.audiobooks;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    FinampSettingsHelper.overwriteFinampSettings(finampSettings);
+  }
+}
+
 void _setupFinampUserHelper() {
   GetIt.instance.registerSingleton(FinampUserHelper());
 }
@@ -304,7 +342,8 @@ class Finamp extends StatelessWidget {
                 valueListenable: ThemeModeHelper.themeModeListener,
                 builder: (_, box, __) {
                   return MaterialApp(
-                    title: "Finamp",
+                    title: "AnglerAmp",
+                    debugShowCheckedModeBanner: false,
                     routes: {
                       SplashScreen.routeName: (context) => const SplashScreen(),
                       UserSelector.routeName: (context) => const UserSelector(),
@@ -312,6 +351,8 @@ class Finamp extends StatelessWidget {
                       MusicScreen.routeName: (context) => const MusicScreen(),
                       AlbumScreen.routeName: (context) => const AlbumScreen(),
                       ArtistScreen.routeName: (context) => const ArtistScreen(),
+                      AudiobookScreen.routeName: (context) =>
+                          const AudiobookScreen(),
                       AddToPlaylistScreen.routeName: (context) =>
                           const AddToPlaylistScreen(),
                       PlayerScreen.routeName: (context) => const PlayerScreen(),
@@ -336,6 +377,8 @@ class Finamp extends StatelessWidget {
                           const TabsSettingsScreen(),
                       LayoutSettingsScreen.routeName: (context) =>
                           const LayoutSettingsScreen(),
+                      AboutScreen.routeName: (context) =>
+                          const AboutScreen(),
                       LanguageSelectionScreen.routeName: (context) =>
                           const LanguageSelectionScreen(),
                     },
@@ -353,6 +396,87 @@ class Finamp extends StatelessWidget {
                     darkTheme: ThemeData(
                       brightness: Brightness.dark,
                       colorScheme: darkColorScheme,
+                      scaffoldBackgroundColor: const Color(0xFF03070F),
+                      cardTheme: CardThemeData(
+                        color: const Color(0xFF080F1E),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Color(0xFF1E3054)),
+                        ),
+                      ),
+                      appBarTheme: const AppBarTheme(
+                        backgroundColor: Color(0xFF080F1E),
+                        elevation: 0,
+                        systemOverlayStyle: SystemUiOverlayStyle(
+                          statusBarBrightness: Brightness.dark,
+                          statusBarIconBrightness: Brightness.light,
+                        ),
+                      ),
+                      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+                        backgroundColor: Color(0xFF080F1E),
+                        selectedItemColor: Color(0xFF34D399),
+                        unselectedItemColor: Color(0xFF475569),
+                      ),
+                      tabBarTheme: const TabBarThemeData(
+                        labelColor: Color(0xFF60A5FA),
+                        unselectedLabelColor: Color(0xFF64748B),
+                        indicatorColor: Color(0xFF60A5FA),
+                      ),
+                      dividerTheme: const DividerThemeData(
+                        color: Color(0xFF17243E),
+                        thickness: 1,
+                      ),
+                      listTileTheme: const ListTileThemeData(
+                        tileColor: Color(0xFF080F1E),
+                        selectedTileColor: Color(0xFF0F182E),
+                      ),
+                      switchTheme: SwitchThemeData(
+                        thumbColor: MaterialStateProperty.resolveWith(
+                          (states) => states.contains(MaterialState.selected)
+                              ? const Color(0xFF34D399)
+                              : const Color(0xFF94A3B8),
+                        ),
+                        trackColor: MaterialStateProperty.resolveWith(
+                          (states) => states.contains(MaterialState.selected)
+                              ? const Color(0xFF34D399).withOpacity(0.4)
+                              : const Color(0xFF1E3054),
+                        ),
+                      ),
+                      popupMenuTheme: const PopupMenuThemeData(
+                        color: Color(0xFF0F182E),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                          side: BorderSide(color: Color(0xFF1E3054)),
+                        ),
+                      ),
+                      dialogTheme: const DialogThemeData(
+                        backgroundColor: Color(0xFF080F1E),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(16)),
+                          side: BorderSide(color: Color(0xFF1E3054)),
+                        ),
+                      ),
+                      snackBarTheme: const SnackBarThemeData(
+                        backgroundColor: Color(0xFF0F182E),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                          side: BorderSide(color: Color(0xFF1E3054)),
+                        ),
+                      ),
+                      drawerTheme: const DrawerThemeData(
+                        backgroundColor: Color(0xFF080F1E),
+                      ),
+                      navigationBarTheme: NavigationBarThemeData(
+                        backgroundColor: const Color(0xFF080F1E),
+                        indicatorColor: const Color(0xFF34D399).withOpacity(0.2),
+                        iconTheme: MaterialStateProperty.resolveWith(
+                          (states) => states.contains(MaterialState.selected)
+                              ? const IconThemeData(color: Color(0xFF34D399))
+                              : const IconThemeData(color: Color(0xFF475569)),
+                        ),
+                      ),
                     ),
                     themeMode: box.get("ThemeMode"),
                     localizationsDelegates: const [
@@ -387,7 +511,7 @@ class FinampErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Finamp",
+      title: "AnglerAmp",
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

@@ -40,8 +40,8 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.unicornsonlsd.finamp"
-        minSdkVersion 21
+        applicationId "com.moonie.angleramp"
+        minSdkVersion flutter.minSdkVersion
         targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName

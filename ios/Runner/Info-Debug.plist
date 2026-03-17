@@ -7,11 +7,11 @@
 	<key>LSApplicationCategoryType</key>
 	<string></string>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>Finamp can use your media library to store downloaded songs. If you don&apos;t want this, Finamp can also download songs to the app&apos;s internal directory, which doesn&apos;t use any permissions.</string>
+	<string>AnglerAmp can use your media library to store downloaded songs. If you don&apos;t want this, AnglerAmp can also download songs to the app&apos;s internal directory, which doesn&apos;t use any permissions.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Finamp</string>
+	<string>AnglerAmp</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -19,7 +19,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>finamp</string>
+	<string>AnglerAmp</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -70,10 +70,44 @@
 	<string>Required for debugging</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<!-- Enable viewing Finamp downloads on iOS -->
+	<!-- Enable viewing AnglerAmp downloads on iOS -->
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<!-- CarPlay: use UIApplicationSceneManifest for CPTemplateApplicationSceneDelegate
+	     but keep UIApplicationSupportsMultipleScenes=false so Flutter's main window
+	     still uses UIApplicationDelegate (no blank-screen regression). -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<!-- false = only one scene at a time; Flutter window stays on old-style
+		     UIApplicationDelegate lifecycle, CarPlay gets its own scene. -->
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<!-- Main phone window. MainSceneDelegate acquires Flutter's pre-built
+			     UIWindow from FlutterAppDelegate and connects it to this scene. -->
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FlutterSceneDelegate</string>
+				</dict>
+			</array>
+			<!-- CarPlay scene. -->
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>CarPlay Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 </dict>
 </plist>

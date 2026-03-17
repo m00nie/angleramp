@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
@@ -34,10 +34,42 @@ class _MusicScreenState extends State<MusicScreen>
   final _musicScreenLogger = Logger("MusicScreen");
 
   TabController? _tabController;
+  bool _wasBookMode = false;
 
   final _audioServiceHelper = GetIt.instance<AudioServiceHelper>();
   final _finampUserHelper = GetIt.instance<FinampUserHelper>();
   final _jellyfinApiHelper = GetIt.instance<JellyfinApiHelper>();
+
+  bool get _isBookMode =>
+      _finampUserHelper.currentUser?.currentView?.collectionType == "books";
+
+  /// Returns the tabs to display, depending on whether a books library is
+  /// currently selected.
+  List<TabContentType> _getVisibleTabs() {
+    if (_isBookMode) {
+      return const [
+        TabContentType.artists,
+        TabContentType.audiobooks,
+        TabContentType.playlists,
+        TabContentType.genres,
+      ];
+    }
+    return FinampSettingsHelper.finampSettings.tabOrder
+        .where((e) =>
+            (FinampSettingsHelper.finampSettings.showTabs[e] ?? false) &&
+            e != TabContentType.audiobooks)
+        .toList();
+  }
+
+  /// Returns a display label for a tab, using audiobook-specific names when
+  /// a books library is currently selected.
+  String _tabLabel(TabContentType tabType, BuildContext context) {
+    if (_isBookMode) {
+      if (tabType == TabContentType.artists) return "Authors".toUpperCase();
+      if (tabType == TabContentType.audiobooks) return "Titles".toUpperCase();
+    }
+    return tabType.toLocalisedString(context).toUpperCase();
+  }
 
   void _stopSearching() {
     setState(() {
@@ -48,14 +80,19 @@ class _MusicScreenState extends State<MusicScreen>
   }
 
   void _tabIndexCallback() {
-    var tabKey = FinampSettingsHelper.finampSettings.showTabs.entries
-        .where((element) => element.value)
-        .elementAt(_tabController!.index)
-        .key;
-    if (_tabController != null &&
-        (tabKey == TabContentType.songs ||
-            tabKey == TabContentType.artists ||
-            tabKey == TabContentType.albums)) {
+    // In book mode never show a FAB
+    if (_isBookMode) {
+      if (_showShuffleFab) setState(() => _showShuffleFab = false);
+      return;
+    }
+    final visibleTabs = _getVisibleTabs();
+    if (_tabController == null || _tabController!.index >= visibleTabs.length) {
+      return;
+    }
+    final tabKey = visibleTabs[_tabController!.index];
+    if (tabKey == TabContentType.songs ||
+        tabKey == TabContentType.artists ||
+        tabKey == TabContentType.albums) {
       setState(() {
         _showShuffleFab = true;
       });
@@ -68,13 +105,14 @@ class _MusicScreenState extends State<MusicScreen>
     }
   }
 
-  void _buildTabController() {
+  void _buildTabController([int? length]) {
     _tabController?.removeListener(_tabIndexCallback);
 
     _tabController = TabController(
-      length: FinampSettingsHelper.finampSettings.showTabs.entries
-          .where((element) => element.value)
-          .length,
+      length: length ?? _getVisibleTabs().length,
+      // Default to the Titles tab (index 1) when in books mode so that the
+      // book list is immediately visible instead of the Authors list.
+      initialIndex: _isBookMode ? 1 : 0,
       vsync: this,
     );
 
@@ -84,6 +122,7 @@ class _MusicScreenState extends State<MusicScreen>
   @override
   void initState() {
     super.initState();
+    _wasBookMode = _isBookMode;
     _buildTabController();
   }
 
@@ -94,10 +133,10 @@ class _MusicScreenState extends State<MusicScreen>
   }
 
   FloatingActionButton? getFloatingActionButton() {
-    var tabList = FinampSettingsHelper.finampSettings.showTabs.entries
-        .where((element) => element.value)
-        .map((e) => e.key)
-        .toList();
+    // No FAB for books libraries
+    if (_isBookMode) return null;
+
+    final tabList = _getVisibleTabs();
 
     // Show the floating action button only on the albums, artists and songs tab.
     if (_tabController!.index == tabList.indexOf(TabContentType.songs)) {
@@ -166,15 +205,19 @@ class _MusicScreenState extends State<MusicScreen>
           builder: (context, value, _) {
             final finampSettings = value.get("FinampSettings");
 
-            // Get the tabs from the user's tab order, and filter them to only
-            // include enabled tabs
-            final tabs = finampSettings!.tabOrder.where((e) =>
-                FinampSettingsHelper.finampSettings.showTabs[e] ?? false);
+            // Get the effective tabs depending on whether a books library is
+            // selected.  For books libraries, use a fixed audiobook tab set.
+            // For music libraries, use the user's configured tab order,
+            // excluding the audiobooks tab (which is managed automatically).
+            final isBookMode = _isBookMode;
+            final tabs = _getVisibleTabs();
 
-            if (tabs.length != _tabController?.length) {
+            if (tabs.length != _tabController?.length ||
+                isBookMode != _wasBookMode) {
               _musicScreenLogger.info(
-                  "Rebuilding MusicScreen tab controller (${tabs.length} != ${_tabController?.length})");
-              _buildTabController();
+                  "Rebuilding MusicScreen tab controller (${tabs.length} tabs, bookMode=$isBookMode)");
+              _wasBookMode = isBookMode;
+              _buildTabController(tabs.length);
             }
 
             return WillPopScope(
@@ -206,9 +249,7 @@ class _MusicScreenState extends State<MusicScreen>
                     controller: _tabController,
                     tabs: tabs
                         .map((tabType) => Tab(
-                              text: tabType
-                                  .toLocalisedString(context)
-                                  .toUpperCase(),
+                              text: _tabLabel(tabType, context),
                             ))
                         .toList(),
                     isScrollable: true,
@@ -234,14 +275,16 @@ class _MusicScreenState extends State<MusicScreen>
                           )
                         ]
                       : [
-                          SortOrderButton(
-                            tabs.elementAt(_tabController!.index),
-                          ),
-                          SortByMenuButton(
-                            tabs.elementAt(_tabController!.index),
-                          ),
+                          if (!isBookMode) ...[
+                            SortOrderButton(
+                              tabs.elementAt(_tabController!.index),
+                            ),
+                            SortByMenuButton(
+                              tabs.elementAt(_tabController!.index),
+                            ),
+                          ],
                           IconButton(
-                            icon: finampSettings.isFavourite
+                            icon: finampSettings!.isFavourite
                                 ? const Icon(Icons.favorite)
                                 : const Icon(Icons.favorite_outline),
                             onPressed: finampSettings.isOffline
@@ -272,7 +315,7 @@ class _MusicScreenState extends State<MusicScreen>
                       .map((tabType) => MusicScreenTabView(
                             tabContentType: tabType,
                             searchTerm: searchQuery,
-                            isFavourite: finampSettings.isFavourite,
+                            isFavourite: finampSettings!.isFavourite,
                             sortBy: finampSettings.getTabSortBy(tabType),
                             sortOrder: finampSettings.getSortOrder(tabType),
                             view: _finampUserHelper.currentUser?.currentView,

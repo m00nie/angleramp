@@ -2,7 +2,7 @@ import 'package:finamp/components/MusicScreen/album_item_list_tile.dart';
 import 'package:finamp/services/downloads_helper.dart';
 import 'package:finamp/services/finamp_settings_helper.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:finamp/l10n/app_localizations.dart';
 import 'package:get_it/get_it.dart';
 
 import '../../models/jellyfin_models.dart';
@@ -10,6 +10,7 @@ import '../../services/audio_service_helper.dart';
 import '../../services/jellyfin_api_helper.dart';
 import '../../screens/artist_screen.dart';
 import '../../screens/album_screen.dart';
+import '../../screens/audiobook_screen.dart';
 import '../error_snackbar.dart';
 import 'album_item_card.dart';
 
@@ -80,6 +81,10 @@ class _AlbumItemState extends State<AlbumItem> {
               mutableAlbum.type == "MusicGenre") {
             Navigator.of(context)
                 .pushNamed(ArtistScreen.routeName, arguments: mutableAlbum);
+          } else if (mutableAlbum.type == "AudioBook" ||
+              mutableAlbum.type == "Book") {
+            Navigator.of(context)
+                .pushNamed(AudiobookScreen.routeName, arguments: mutableAlbum);
           } else {
             Navigator.of(context)
                 .pushNamed(AlbumScreen.routeName, arguments: mutableAlbum);
