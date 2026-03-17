@@ -46,6 +46,7 @@ import 'screens/transcoding_settings_screen.dart';
 import 'screens/user_selector.dart';
 import 'screens/view_selector.dart';
 import 'services/audio_service_helper.dart';
+import 'services/carplay_service.dart';
 import 'services/download_update_stream.dart';
 import 'services/downloads_helper.dart';
 import 'services/jellyfin_api_helper.dart';
@@ -69,6 +70,7 @@ void main() async {
     await _setupDownloader();
     await _setupDownloadsHelper();
     await _setupAudioServiceHelper();
+    _setupCarPlayService();
   } catch (e) {
     hasFailed = true;
     runApp(FinampErrorApp(
@@ -95,6 +97,11 @@ void main() async {
 
 void _setupJellyfinApiData() {
   GetIt.instance.registerSingleton(JellyfinApiHelper());
+}
+
+void _setupCarPlayService() {
+  GetIt.instance.registerSingleton(CarPlayService());
+  GetIt.instance<CarPlayService>().initialize();
 }
 
 void _setupOfflineListenLogHelper() {

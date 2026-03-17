@@ -75,5 +75,39 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<!-- CarPlay: use UIApplicationSceneManifest for CPTemplateApplicationSceneDelegate
+	     but keep UIApplicationSupportsMultipleScenes=false so Flutter's main window
+	     still uses UIApplicationDelegate (no blank-screen regression). -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<!-- false = only one scene at a time; Flutter window stays on old-style
+		     UIApplicationDelegate lifecycle, CarPlay gets its own scene. -->
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<!-- Main phone window. MainSceneDelegate acquires Flutter's pre-built
+			     UIWindow from FlutterAppDelegate and connects it to this scene. -->
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FlutterSceneDelegate</string>
+				</dict>
+			</array>
+			<!-- CarPlay scene. -->
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>CarPlay Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 </dict>
 </plist>

@@ -1,8 +1,11 @@
 # AnglerAmp
 
-A personal fork of [Finamp](https://github.com/jmshrv/finamp) — the excellent and must more reliable/better/original open-source Jellyfin music player for Android and iOS.
+A personal fork of [Finamp](https://github.com/jmshrv/finamp) — the excellent and much more reliable/better/original open-source Jellyfin music player for Android and iOS.
 
-**All credit belongs to jmshrv and the Finamp contributors.** This fork adds a small number of personal improvements on top of their great work I find useful myself. If you want a well-maintained, polished Jellyfin music client, please use [Finamp](https://github.com/jmshrv/finamp) instead.
+**All credit belongs to jmshrv and the Finamp contributors.** This fork adds a small number of personal improvements on top of their great work I find useful myself and am currently testing to contribute back once I can tidy them up and confirm they work in a reliable way.
+
+If you want a well-maintained, polished Jellyfin music client, please use [Finamp](https://github.com/jmshrv/finamp) instead - Nobody should really be using AnglerAmp in the real world.
+
 
 ---
 
@@ -11,7 +14,7 @@ A personal fork of [Finamp](https://github.com/jmshrv/finamp) — the excellent 
 | Feature | Description |
 |---|---|
 | **Basic audiobook support** | Browse and play audiobooks stored in your Jellyfin library (I listen to lots of books and music) |
-| **Basic CarPlay support** | Control playback from your car's screen via CarPlay (in the car :D) |
+| **Very basic CarPlay support** | Control playback from your car's screen via CarPlay (I mostly listen in the car :D) |
 | **Browse audio by directory** | Navigate your music by folder path — handy when your metadata tags are poorly managed (like mine) |
 | **Different theme** | A dark navy colour scheme with emerald-green accents, gentler on my sensitive eyes |
 
