@@ -172,10 +172,12 @@ class JellyfinApiHelper {
       // because Jellyfin's virtual parentId for audio is unreliable for
       // untagged/YouTube tracks and sub-folder items may not surface correctly
       // via IncludeItemTypes=Folder when parentId is a synthetic item.
-      final folderPath = parentItem!.path;
+      final rawFolderPath = parentItem!.path;
       final viewId = currentUser.currentViewId;
 
-      if (folderPath == null || viewId == null) return [];
+      if (rawFolderPath == null || viewId == null) return [];
+      // Normalize to forward-slash so Windows server paths (\) work.
+      final folderPath = _normalizePath(rawFolderPath);
 
       final allAudioResponse = await jellyfinApi.getItems(
         userId: currentUser.id,
@@ -199,8 +201,10 @@ class JellyfinApiHelper {
       final dirTracksMap = <String, List<BaseItemDto>>{};
 
       for (final track in allAudio) {
-        final p = track.path;
-        if (p == null || !p.startsWith(pathPrefix)) continue;
+        final rawP = track.path;
+        if (rawP == null) continue;
+        final p = _normalizePath(rawP);
+        if (!p.startsWith(pathPrefix)) continue;
         final relative = p.substring(pathPrefix.length);
         final slashIdx = relative.indexOf("/");
         if (slashIdx < 0) {
@@ -248,8 +252,13 @@ class JellyfinApiHelper {
           QueryResult_BaseItemDto.fromJson(allAudioResponse).items ?? [];
       if (allTracks.isEmpty) return [];
 
-      final trackPaths =
-          allTracks.map((t) => t.path).whereType<String>().toList();
+      // Normalize paths so Windows server paths (backslash) work with the
+      // forward-slash prefix logic below.
+      final trackPaths = allTracks
+          .map((t) => t.path)
+          .whereType<String>()
+          .map(_normalizePath)
+          .toList();
       if (trackPaths.isEmpty) return [];
       final prefix = _commonPathPrefix(trackPaths);
 
@@ -257,8 +266,10 @@ class JellyfinApiHelper {
       // Use a map to accumulate runTimeTicks per directory.
       final dirTicksMap = <String, int>{};
       for (final track in allTracks) {
-        final p = track.path;
-        if (p == null || !p.startsWith(prefix)) continue;
+        final rawP = track.path;
+        if (rawP == null) continue;
+        final p = _normalizePath(rawP);
+        if (!p.startsWith(prefix)) continue;
         final relative = p.substring(prefix.length);
         final slashIdx = relative.indexOf("/");
         if (slashIdx < 0) continue; // track directly at library root
@@ -570,6 +581,10 @@ class JellyfinApiHelper {
 
 /// Returns the longest common directory prefix shared by all [paths], always
 /// ending with "/" so it can be used as a directory prefix directly.
+/// Normalize path separators to forward-slash so that Windows-style paths
+/// (backslash) work with the same prefix and splitting logic as Unix paths.
+String _normalizePath(String path) => path.replaceAll('\\', '/');
+
 String _commonPathPrefix(List<String> paths) {
   if (paths.isEmpty) return "";
   // Start with the directory of the first path (trim the filename part).

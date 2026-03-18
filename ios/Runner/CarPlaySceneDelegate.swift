@@ -124,9 +124,47 @@ class CarPlayController: NSObject {
 
     // MARK: - Theme
 
-    /// Apply emerald-green tint to the CarPlay navigation chrome.
+    /// Apply the app's dark navy / emerald-green palette to all CarPlay chrome.
+    ///
+    /// Flutter renders entirely inside a custom Metal view, so UIAppearance
+    /// changes here only affect the CarPlay template UI — not the phone screen.
+    /// `configureWithOpaqueBackground()` explicitly opts out of iOS 26's
+    /// translucent "Liquid Glass" design in favour of our solid colours.
     private func applyTheme() {
-        UINavigationBar.appearance().tintColor = .cpGreen
+        // ── Navigation bar ────────────────────────────────────────────────
+        let navAp = UINavigationBarAppearance()
+        navAp.configureWithOpaqueBackground()
+        navAp.backgroundColor = .cpNavy
+        navAp.titleTextAttributes = [
+            .foregroundColor: UIColor.white,
+            .font: UIFont.systemFont(ofSize: 17, weight: .semibold),
+        ]
+        navAp.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        // Back button chevron colour
+        navAp.setBackIndicatorImage(
+            UIImage(systemName: "chevron.left"),
+            transitionMaskImage: UIImage(systemName: "chevron.left")
+        )
+        let navBar = UINavigationBar.appearance()
+        navBar.standardAppearance   = navAp
+        navBar.scrollEdgeAppearance = navAp
+        navBar.compactAppearance    = navAp
+        navBar.tintColor            = .cpGreen   // back chevron + bar buttons
+
+        // ── Tab bar ───────────────────────────────────────────────────────
+        let tabAp = UITabBarAppearance()
+        tabAp.configureWithOpaqueBackground()
+        tabAp.backgroundColor = .cpNavy
+        let tabItem = UITabBarItemAppearance()
+        tabItem.selected.iconColor  = .cpGreen
+        tabItem.selected.titleTextAttributes  = [.foregroundColor: UIColor.cpGreen]
+        tabItem.normal.iconColor    = UIColor(white: 0.55, alpha: 1)
+        tabItem.normal.titleTextAttributes    = [.foregroundColor: UIColor(white: 0.55, alpha: 1)]
+        tabAp.stackedLayoutAppearance = tabItem
+        let tabBar = UITabBar.appearance()
+        tabBar.standardAppearance   = tabAp
+        tabBar.tintColor            = .cpGreen
+        tabBar.unselectedItemTintColor = UIColor(white: 0.55, alpha: 1)
     }
 
     // MARK: - Root template
@@ -163,31 +201,108 @@ class CarPlayController: NSObject {
             guard let self = self else { return }
             DispatchQueue.main.async {
                 let maxTabs = CPTabBarTemplate.maximumTabCount
-                NSLog("[CarPlay] maximumTabCount=\(maxTabs), result=\(String(describing: result))")
-
+                NSLog("[CarPlay] maximumTabCount=\(maxTabs)")
                 let tabNames = (result as? [String]) ?? ["albums", "artists", "songs", "playlists"]
-                // Cap to CPTabBarTemplate.maximumTabCount (audio apps typically get 4;
-                // using a hardcoded 5 can exceed the limit and throw a fatal exception).
-                let tabs = Array(tabNames.compactMap { CarPlayTab(rawValue: $0) }.prefix(maxTabs))
-                NSLog("[CarPlay] Resolved \(tabs.count) tabs: \(tabs.map(\.rawValue))")
+                let allTabs  = tabNames.compactMap { CarPlayTab(rawValue: $0) }
 
-                if tabs.count >= 2 {
-                    let templates = tabs.map { self.makeRootListTemplate(for: $0) }
-                    // Log each template's validation-critical properties.
-                    for (i, t) in templates.enumerated() {
-                        NSLog("[CarPlay] Tab[\(i)] tabTitle='\(t.tabTitle ?? "nil")' tabImage=\(t.tabImage == nil ? "NIL" : "OK")")
-                    }
+                // Audiobooks and folders always live in the Browse / Library tab
+                // so they are always reachable regardless of which tabs are
+                // configured and regardless of the 4-tab cap.
+                let musicTabs    = allTabs.filter { $0 != .audiobooks && $0 != .folders }
+                let mainTabs     = Array(musicTabs.prefix(maxTabs - 1))
+                // Any music tabs that didn't fit go into Browse as menu items.
+                let overflowTabs = Array(musicTabs.dropFirst(maxTabs - 1))
+
+                NSLog("[CarPlay] mainTabs=\(mainTabs.map(\.rawValue)) overflow=\(overflowTabs.map(\.rawValue))")
+
+                var templates: [CPListTemplate] = mainTabs.map { self.makeRootListTemplate(for: $0) }
+                templates.append(self.makeBrowseTemplate(overflow: overflowTabs))
+
+                if templates.count >= 2 {
                     let tabBar = CPTabBarTemplate(templates: templates)
                     tabBar.delegate = self
                     self.interfaceController.setRootTemplate(tabBar, animated: false) { _, _ in }
                 } else {
-                    // Only 1 tab enabled (or no response): show it directly.
-                    let tab = tabs.first ?? .albums
-                    let template = self.makeRootListTemplate(for: tab)
-                    self.interfaceController.setRootTemplate(template, animated: false) { _, _ in }
+                    // Edge-case: 0 music tabs → show Browse directly (no tab bar)
+                    self.interfaceController.setRootTemplate(
+                        templates.first ?? self.makeBrowseTemplate(overflow: []),
+                        animated: false
+                    ) { _, _ in }
                 }
             }
         }
+    }
+
+    // MARK: - Browse / Library tab
+
+    /// The always-present last tab. Contains Audiobooks, folder navigation, and
+    /// any music tabs that were pushed off by the `maximumTabCount` limit.
+    private func makeBrowseTemplate(overflow: [CarPlayTab]) -> CPListTemplate {
+        var items: [CPListItem] = []
+
+        // Overflow music tabs (e.g. Playlists when the 4-tab cap is reached)
+        for tab in overflow {
+            items.append(makeBrowseMenuItem(title: tab.title, symbol: tab.symbolName) { [weak self] in
+                guard let self = self else { return }
+                let tpl = self.buildListTemplate(title: tab.title, symbolName: tab.symbolName)
+                self.setLoadingState(tpl)
+                self.interfaceController.pushTemplate(tpl, animated: true) { _, _ in }
+                self.loadItems(tab: tab, parentId: nil, parentType: nil, into: tpl)
+            })
+        }
+
+        // Audiobooks — always present
+        items.append(makeBrowseMenuItem(
+            title: "Audiobooks",
+            symbol: "books.vertical",
+            detail: "Browse your audiobook library"
+        ) { [weak self] in
+            guard let self = self else { return }
+            let tpl = self.buildListTemplate(title: "Audiobooks", symbolName: "books.vertical")
+            self.setLoadingState(tpl)
+            self.interfaceController.pushTemplate(tpl, animated: true) { _, _ in }
+            self.loadItems(tab: .audiobooks, parentId: nil, parentType: nil, into: tpl)
+        })
+
+        // Folder browser — always present
+        items.append(makeBrowseMenuItem(
+            title: "Browse by Folder",
+            symbol: "folder",
+            detail: "Navigate your media by directory"
+        ) { [weak self] in
+            guard let self = self else { return }
+            let tpl = self.buildListTemplate(title: "Browse by Folder", symbolName: "folder")
+            self.setLoadingState(tpl)
+            self.interfaceController.pushTemplate(tpl, animated: true) { _, _ in }
+            self.loadItems(tab: .folders, parentId: nil, parentType: nil, into: tpl)
+        })
+
+        let section  = CPListSection(items: items)
+        let template = CPListTemplate(title: "Library", sections: [section])
+        template.tabTitle = "Library"
+        template.tabImage = tintedSymbol("books.vertical.fill", color: .cpGreen)
+        return template
+    }
+
+    /// Build a single disclosure-style row for use in the Browse/Library tab.
+    private func makeBrowseMenuItem(
+        title: String,
+        symbol: String,
+        detail: String? = nil,
+        action: @escaping () -> Void
+    ) -> CPListItem {
+        let item = CPListItem(
+            text: title,
+            detailText: detail,
+            image: tintedSymbol(symbol, color: .cpGreen, size: 44),
+            accessoryImage: nil,
+            accessoryType: .disclosureIndicator
+        )
+        item.handler = { _, done in
+            action()
+            done()
+        }
+        return item
     }
 
     // MARK: - List template factory
@@ -212,10 +327,13 @@ class CarPlayController: NSObject {
     // MARK: - Data loading
 
     /// Fetch items from Dart and populate the template.
+    /// - Parameter path: For folder drilling, the file-system path of the
+    ///   parent directory (needed by `JellyfinApiHelper` to locate children).
     private func loadItems(
         tab: CarPlayTab,
         parentId: String?,
         parentType: String?,
+        path: String? = nil,
         into template: CPListTemplate,
         completion: (([[String: Any]]) -> Void)? = nil
     ) {
@@ -224,11 +342,20 @@ class CarPlayController: NSObject {
         var args: [String: Any] = ["tabType": tab.rawValue]
         if let pid = parentId   { args["parentId"]   = pid }
         if let pt  = parentType { args["parentType"] = pt  }
+        if let p   = path       { args["parentPath"] = p   }
 
         channel?.invokeMethod("getItems", arguments: args) { [weak self] result in
             guard let self = self else { return }
+            // Surface Dart-side errors so they appear in Console rather than
+            // silently becoming an empty list.
+            if let err = result as? FlutterError {
+                NSLog("[CarPlay] getItems error for tab=%@ parentType=%@: %@ – %@",
+                      tab.rawValue, parentType ?? "nil", err.code, err.message ?? "")
+            }
             DispatchQueue.main.async {
                 let items = (result as? [[String: Any]]) ?? []
+                NSLog("[CarPlay] getItems: %d item(s) tab=%@ parentType=%@ parentId=%@",
+                      items.count, tab.rawValue, parentType ?? "nil", parentId ?? "nil")
 
                 if items.isEmpty {
                     template.emptyViewTitleVariants    = ["No items"]
@@ -329,7 +456,8 @@ class CarPlayController: NSObject {
             pushDrillTemplate(title: name, tab: .albums, parentId: id, parentType: type)
 
         case "Folder":
-            pushDrillTemplate(title: name, tab: .folders, parentId: id, parentType: type)
+            let path = item["path"] as? String
+            pushDrillTemplate(title: name, tab: .folders, parentId: id, parentType: type, path: path)
 
         default:
             break
@@ -340,14 +468,16 @@ class CarPlayController: NSObject {
         title: String,
         tab: CarPlayTab,
         parentId: String,
-        parentType: String
+        parentType: String,
+        path: String? = nil
     ) {
         let drillTemplate = buildListTemplate(title: title, symbolName: tab.symbolName)
         setLoadingState(drillTemplate)
 
         interfaceController.pushTemplate(drillTemplate, animated: true) { _, _ in }
 
-        loadItems(tab: tab, parentId: parentId, parentType: parentType, into: drillTemplate) { [weak self] items in
+        loadItems(tab: tab, parentId: parentId, parentType: parentType,
+                  path: path, into: drillTemplate) { [weak self] items in
             guard let self = self else { return }
             // Re-build items so that tapping a song plays the whole album from that index
             if tab == .songs || (tab == .folders && items.allSatisfy({ ($0["type"] as? String) == "Audio" }) ) {
@@ -418,7 +548,7 @@ class CarPlayController: NSObject {
                       let data = data,
                       let img  = UIImage(data: data) else { return }
 
-                let sized = self.resize(img, to: CGSize(width: 58, height: 58))
+                let sized = self.resize(img, to: CGSize(width: 80, height: 80), cornerRadius: 6)
                 self.imageCache[urlStr] = sized
 
                 DispatchQueue.main.async {
@@ -453,9 +583,13 @@ class CarPlayController: NSObject {
             .withTintColor(color, renderingMode: .alwaysOriginal)
     }
 
-    private func resize(_ image: UIImage, to size: CGSize) -> UIImage {
+    private func resize(_ image: UIImage, to size: CGSize, cornerRadius: CGFloat = 0) -> UIImage {
         UIGraphicsImageRenderer(size: size).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
+            let rect = CGRect(origin: .zero, size: size)
+            if cornerRadius > 0 {
+                UIBezierPath(roundedRect: rect, cornerRadius: cornerRadius).addClip()
+            }
+            image.draw(in: rect)
         }
     }
 }
