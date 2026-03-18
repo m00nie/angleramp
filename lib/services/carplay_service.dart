@@ -128,8 +128,8 @@ class CarPlayService {
   Map<String, Object?> _toMap(BaseItemDto item) {
     final imageUrl = _jellyfinApiHelper.getImageUrl(
       item: item,
-      maxWidth: 200,
-      maxHeight: 200,
+      maxWidth: 300,
+      maxHeight: 300,
     )?.toString();
 
     return {
@@ -162,6 +162,11 @@ class CarPlayService {
       case 'audiobooks':
         return 'AudioBook';
       case 'folders':
+        // When drilling into a folder, include sub-folders AND audio files so
+        // the user can see (and play) tracks without drilling further.
+        // At root level (no parentType) return Folder only so the top-level
+        // media library folders are listed, not individual tracks.
+        if (parentType == 'Folder') return null;
         return 'Folder';
       default:
         return null;
@@ -195,6 +200,9 @@ class CarPlayService {
         .whereType<String>()
         .map((id) => _itemCache[id])
         .whereType<BaseItemDto>()
+        // Only queue Audio items — folders and other container types are not
+        // playable and would cause errors in the audio service.
+        .where((item) => item.type == 'Audio')
         .toList();
 
     if (items.isEmpty) {
