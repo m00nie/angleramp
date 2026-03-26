@@ -24,6 +24,7 @@ class AudioServiceHelper {
     required List<BaseItemDto> itemList,
     int initialIndex = 0,
     bool shuffle = false,
+    Duration? initialPosition,
   }) async {
     try {
       if (initialIndex > itemList.length) {
@@ -40,14 +41,10 @@ class AudioServiceHelper {
         }
       }
 
-      // if (!shuffle) {
-      //   // Give the audio service our next initial index so that playback starts
-      //   // at that index. We don't do this if shuffling because it causes the
-      //   // queue to always start at the start (although you could argue that we
-      //   // still should if initialIndex is not 0, but that doesn't happen
-      //   // anywhere in this app so oh well).
       _audioHandler.setNextInitialIndex(initialIndex);
-      // }
+      if (initialPosition != null) {
+        _audioHandler.setNextInitialPosition(initialPosition);
+      }
 
       await _audioHandler.updateQueue(queue);
 
@@ -194,7 +191,7 @@ class AudioServiceHelper {
         ? false
         : await _downloadsHelper.verifyDownloadedSong(downloadedSong);
 
-    return MediaItem(
+    final mediaItem = MediaItem(
       id: uuid.v4(),
       album: item.album ?? "Unknown Album",
       artist: item.artists?.join(", ") ?? item.albumArtist,
@@ -202,15 +199,12 @@ class AudioServiceHelper {
           _jellyfinApiHelper.getImageUrl(item: item),
       title: item.name ?? "Unknown Name",
       extras: {
-        // "parentId": item.parentId,
-        // "itemId": item.id,
         "itemJson": item.toJson(),
         "shouldTranscode": FinampSettingsHelper.finampSettings.shouldTranscode,
         "downloadedSongJson": isDownloaded
             ? (_downloadsHelper.getDownloadedSong(item.id))!.toJson()
             : null,
         "isOffline": FinampSettingsHelper.finampSettings.isOffline,
-        // TODO: Maybe add transcoding bitrate here?
       },
       // Jellyfin returns microseconds * 10 for some reason
       duration: Duration(
@@ -218,5 +212,15 @@ class AudioServiceHelper {
             (item.runTimeTicks == null ? 0 : item.runTimeTicks! ~/ 10),
       ),
     );
+
+    audioServiceHelperLogger.info(
+        '[Chapters] _generateMediaItem: id=${item.id} type=${item.type} '
+        'jellyfinChapters=${item.chapters?.length ?? 0}');
+
+    return mediaItem;
   }
+
+  // Chapter extraction is now handled in MusicPlayerBackgroundTask.onTrackChanged,
+  // which fires at the correct time after the queue is established, eliminating
+  // the race condition that was preventing reliable chapter loading.
 }

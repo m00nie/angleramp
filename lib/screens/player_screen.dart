@@ -20,6 +20,7 @@ import '../components/PlayerScreen/queue_button.dart';
 import '../components/PlayerScreen/playback_mode.dart';
 import '../components/PlayerScreen/add_to_playlist_button.dart';
 import '../components/PlayerScreen/sleep_timer_button.dart';
+import '../components/PlayerScreen/chapters_button.dart';
 
 final _albumImageProvider =
     StateProvider.autoDispose<ImageProvider?>((_) => null);
@@ -102,7 +103,13 @@ class PlayerScreen extends StatelessWidget {
                                 ),
                                 Align(
                                   alignment: Alignment.centerRight,
-                                  child: QueueButton(),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ChaptersButton(),
+                                      QueueButton(),
+                                    ],
+                                  ),
                                 )
                               ],
                             )

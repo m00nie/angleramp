@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 
 import '../../models/jellyfin_models.dart';
 import '../../services/audio_service_helper.dart';
+import '../../services/jellyfin_api_helper.dart';
 import '../../services/music_player_background_task.dart';
 import '../album_image.dart';
 import '../print_duration.dart';
@@ -49,7 +50,6 @@ class AudiobookFlexibleSpaceBar extends StatelessWidget {
                     Expanded(
                       child: _AudiobookInfo(
                         audiobook: audiobook,
-                        chapterCount: chapters.length,
                         totalDuration: totalDuration,
                       ),
                     ),
@@ -97,18 +97,15 @@ class AudiobookFlexibleSpaceBar extends StatelessWidget {
   }
 }
 
-/// Metadata column shown alongside the book cover: narrator, chapter count,
-/// total runtime, and publication year.
+/// Metadata column shown alongside the book cover: narrator, runtime, and publication year.
 class _AudiobookInfo extends StatelessWidget {
   const _AudiobookInfo({
     Key? key,
     required this.audiobook,
-    required this.chapterCount,
     required this.totalDuration,
   }) : super(key: key);
 
   final BaseItemDto audiobook;
-  final int chapterCount;
   final Duration totalDuration;
 
   @override
@@ -126,11 +123,6 @@ class _AudiobookInfo extends StatelessWidget {
             icon: Icons.person,
             label: "${AppLocalizations.of(context)!.audiobookNarrator}: $narrator",
           ),
-        _MetadataRow(
-          icon: Icons.menu_book,
-          label: AppLocalizations.of(context)!
-              .audiobookChapterCount(chapterCount),
-        ),
         _MetadataRow(
           icon: Icons.timer,
           label: printDuration(totalDuration),
@@ -193,32 +185,31 @@ class _ResumeButton extends StatelessWidget {
   final AudioServiceHelper audioServiceHelper;
   final MusicPlayerBackgroundTask audioHandler;
 
-  /// Determines which chapter index to resume from.
-  /// We look at each chapter's userData.playbackPositionTicks — if a chapter
-  /// has been partially played (ticks > 0 but not 100% played), that is the
-  /// resume point. Otherwise we start from the beginning.
+  /// Determines which chapter (track) index to resume from.
+  /// Returns the first track that is partially played, or the first unplayed
+  /// track after a run of fully-played ones.
   int _resumeIndex() {
     for (int i = 0; i < chapters.length; i++) {
       final userData = chapters[i].userData;
       if (userData == null) continue;
-
       final played = userData.playedPercentage ?? 0;
-      // If this chapter is partially played (between 1% and 99%), resume here.
-      if (played > 0 && played < 99) {
-        return i;
-      }
+      if (played > 0 && played < 99) return i;
     }
-
-    // Fall back: find the first unplayed chapter after a sequence of played ones.
     for (int i = 0; i < chapters.length; i++) {
       final userData = chapters[i].userData;
-      if (userData == null || !userData.played) {
-        return i;
-      }
+      if (userData == null || !userData.played) return i;
     }
-
-    // All chapters played — restart from the beginning.
     return 0;
+  }
+
+  /// Returns the exact seek position within the resume track using Jellyfin's
+  /// stored [UserItemDataDto.playbackPositionTicks].  Returns null (start of
+  /// track) when there is no saved position.
+  Duration? _resumePosition() {
+    final idx = _resumeIndex();
+    final ticks = chapters[idx].userData?.playbackPositionTicks ?? 0;
+    if (ticks <= 0) return null;
+    return Duration(microseconds: ticks ~/ 10);
   }
 
   @override
@@ -226,10 +217,29 @@ class _ResumeButton extends StatelessWidget {
     return ElevatedButton.icon(
       onPressed: chapters.isEmpty
           ? null
-          : () => audioServiceHelper.replaceQueueWithItem(
+          : () async {
+              final idx = _resumeIndex();
+              Duration? position;
+              try {
+                final jellyfinApiHelper =
+                    GetIt.instance<JellyfinApiHelper>();
+                final freshItem =
+                    await jellyfinApiHelper.getItemById(chapters[idx].id);
+                final ticks =
+                    freshItem.userData?.playbackPositionTicks ?? 0;
+                if (ticks > 0) {
+                  position = Duration(microseconds: ticks ~/ 10);
+                }
+              } catch (_) {
+                // Fall back to stale in-memory data if the network call fails.
+                position = _resumePosition();
+              }
+              await audioServiceHelper.replaceQueueWithItem(
                 itemList: chapters,
-                initialIndex: _resumeIndex(),
-              ),
+                initialIndex: idx,
+                initialPosition: position,
+              );
+            },
       icon: const Icon(Icons.play_arrow),
       label: Text(AppLocalizations.of(context)!.resumeAudiobook),
     );

@@ -13,6 +13,7 @@ import 'package:logging/logging.dart';
 
 import '../models/finamp_models.dart';
 import '../models/jellyfin_models.dart';
+import 'chapter_extractor_service.dart';
 import 'finamp_settings_helper.dart';
 import 'finamp_user_helper.dart';
 import 'jellyfin_api_helper.dart';
@@ -108,10 +109,15 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
   /// Set when creating a new queue. Will be used to set the first index in a
   /// new queue.
   int? nextInitialIndex;
+  Duration? nextInitialPosition;
 
   /// Set to true when we're stopping the audio service. Used to avoid playback
   /// progress reporting.
   bool _isStopping = false;
+
+  /// Cache of extracted chapters keyed by Jellyfin item ID.
+  /// Populated by [_maybeExtractChapters] so we don't re-fetch on every resume.
+  final Map<String, List<ChapterInfo>> _chapterCache = {};
 
   /// Holds the current sleep timer, if any. This is a ValueNotifier so that
   /// widgets like SleepTimerButton can update when the sleep timer is/isn't
@@ -306,6 +312,7 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
         await _player.setAudioSource(
           _queueAudioSource,
           initialIndex: nextInitialIndex,
+          initialPosition: nextInitialPosition,
         );
       } on PlayerException catch (e) {
         _audioServiceBackgroundTaskLogger
@@ -331,7 +338,10 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
               "_player.currentIndex is null during onUpdateQueue, not setting new media item");
         } else {
           final item = _getQueueItem(_player.currentIndex!);
-          if (item != null) mediaItem.add(item);
+          if (item != null) {
+            mediaItem.add(item);
+            _reapplyCachedChapters(item);
+          }
         }
       } else {
         if (nextInitialIndex == null) {
@@ -339,12 +349,16 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
               "nextInitialIndex is null during onUpdateQueue, not setting new media item");
         } else {
           final item = _getQueueItem(nextInitialIndex!);
-          if (item != null) mediaItem.add(item);
+          if (item != null) {
+            mediaItem.add(item);
+            _reapplyCachedChapters(item);
+          }
         }
       }
 
       shuffleNextQueue = false;
       nextInitialIndex = null;
+      nextInitialPosition = null;
     } catch (e) {
       _audioServiceBackgroundTaskLogger.severe(e);
       return Future.error(e);
@@ -354,6 +368,14 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
   @override
   Future<void> skipToPrevious() async {
     try {
+      final current = mediaItem.valueOrNull;
+      if (current != null) {
+        final chapters = _getChaptersFromItem(current);
+        if (chapters != null) {
+          await _skipToPreviousChapter(chapters);
+          return;
+        }
+      }
       if (!_player.hasPrevious || _player.position.inSeconds >= 5) {
         await _player.seek(Duration.zero, index: _player.currentIndex);
       } else {
@@ -368,10 +390,85 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
   @override
   Future<void> skipToNext() async {
     try {
+      final current = mediaItem.valueOrNull;
+      if (current != null) {
+        final chapters = _getChaptersFromItem(current);
+        if (chapters != null) {
+          await _skipToNextChapter(chapters);
+          return;
+        }
+      }
       await _player.seekToNext();
     } catch (e) {
       _audioServiceBackgroundTaskLogger.severe(e);
       return Future.error(e);
+    }
+  }
+
+  Future<void> _skipToNextChapter(List<ChapterInfo> chapters) async {
+    final positionTicks = _player.position.inMicroseconds * 10;
+    int currentIdx = 0;
+    for (int i = 0; i < chapters.length; i++) {
+      if (chapters[i].startPositionTicks <= positionTicks) {
+        currentIdx = i;
+      } else {
+        break;
+      }
+    }
+    final nextIdx = currentIdx + 1;
+    if (nextIdx < chapters.length) {
+      _audioServiceBackgroundTaskLogger.info(
+          '[Chapters] skipToNext → chapter $nextIdx/${chapters.length}: ${chapters[nextIdx].name}');
+      await _player.seek(
+          Duration(microseconds: chapters[nextIdx].startPositionTicks ~/ 10));
+    } else {
+      _audioServiceBackgroundTaskLogger
+          .info('[Chapters] skipToNext → at last chapter, seeking to next track');
+      await _player.seekToNext();
+    }
+  }
+
+  Future<void> _skipToPreviousChapter(List<ChapterInfo> chapters) async {
+    final positionUs = _player.position.inMicroseconds;
+    final positionTicks = positionUs * 10;
+    int currentIdx = 0;
+    for (int i = 0; i < chapters.length; i++) {
+      if (chapters[i].startPositionTicks <= positionTicks) {
+        currentIdx = i;
+      } else {
+        break;
+      }
+    }
+    final currentChapterStartUs = chapters[currentIdx].startPositionTicks ~/ 10;
+    if (positionUs - currentChapterStartUs > 3000000) {
+      // More than 3 s into this chapter → restart it
+      _audioServiceBackgroundTaskLogger.info(
+          '[Chapters] skipToPrevious → restart chapter $currentIdx: ${chapters[currentIdx].name}');
+      await _player.seek(Duration(microseconds: currentChapterStartUs));
+    } else if (currentIdx > 0) {
+      // Within 3 s → jump to previous chapter
+      _audioServiceBackgroundTaskLogger.info(
+          '[Chapters] skipToPrevious → chapter ${currentIdx - 1}/${chapters.length}: ${chapters[currentIdx - 1].name}');
+      await _player.seek(Duration(
+          microseconds: chapters[currentIdx - 1].startPositionTicks ~/ 10));
+    } else {
+      // At first chapter → seek to absolute start
+      _audioServiceBackgroundTaskLogger
+          .info('[Chapters] skipToPrevious → at first chapter, seeking to start');
+      await _player.seek(Duration.zero);
+    }
+  }
+
+  /// Returns the chapters from [item]'s extras, or null if none are present.
+  List<ChapterInfo>? _getChaptersFromItem(MediaItem item) {
+    try {
+      final json = item.extras?["itemJson"];
+      if (json == null) return null;
+      final dto = BaseItemDto.fromJson(Map<String, dynamic>.from(json as Map));
+      final chapters = dto.chapters;
+      return (chapters != null && chapters.isNotEmpty) ? chapters : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -452,6 +549,7 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
   }
 
   /// Report track changes to the Jellyfin Server if the user is not offline.
+  /// Also triggers chapter extraction for AudioBook items.
   Future<void> onTrackChanged(
     MediaItem currentItem,
     PlaybackState currentState,
@@ -490,9 +588,81 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
       );
 
       if (playbackData != null) {
-        await _jellyfinApiHelper.reportPlaybackStart(playbackData);
+        try {
+          await _jellyfinApiHelper.reportPlaybackStart(playbackData);
+        } catch (e) {
+          // Don't let a reporting failure block chapter extraction.
+          _audioServiceBackgroundTaskLogger.warning(
+              '[Chapters] reportPlaybackStart failed — continuing with chapter extraction: $e');
+        }
       }
     }
+
+    // Trigger chapter extraction for AudioBook items with no chapter data.
+    _maybeExtractChapters(currentItem);
+  }
+
+  /// If [item] has an entry in [_chapterCache], immediately applies the cached
+  /// chapters to the current [mediaItem] broadcast.  This guards against the
+  /// race where [updateQueue] sets a chapter-free [MediaItem] AFTER
+  /// [onTrackChanged] already applied chapters from cache.
+  void _reapplyCachedChapters(MediaItem item) {
+    final itemId = item.extras?["itemJson"]?["Id"] as String?;
+    if (itemId == null) return;
+    final cached = _chapterCache[itemId];
+    if (cached != null && cached.isNotEmpty) {
+      _audioServiceBackgroundTaskLogger.info(
+          '[Chapters] updateQueue re-applying ${cached.length} cached chapters for $itemId');
+      updateCurrentMediaItemChapters(itemId, cached);
+    }
+  }
+
+  /// Extracts chapters for [item] if it is an AudioBook without chapter data.
+  /// Uses a cache to avoid redundant network requests.
+  void _maybeExtractChapters(MediaItem item) {
+    final type = item.extras?["itemJson"]?["Type"] as String?;
+    final itemId = item.extras?["itemJson"]?["Id"] as String?;
+
+    _audioServiceBackgroundTaskLogger.info(
+        '[Chapters] onTrackChanged — type=$type id=$itemId');
+
+    if (type != 'AudioBook' || itemId == null) return;
+    if (FinampSettingsHelper.finampSettings.isOffline) return;
+
+    // If item already carries chapters from earlier extraction, cache them.
+    final existing = _getChaptersFromItem(item);
+    if (existing != null) {
+      _audioServiceBackgroundTaskLogger.info(
+          '[Chapters] Item already has ${existing.length} chapters — caching');
+      _chapterCache[itemId] = existing;
+      return;
+    }
+
+    // Serve from cache immediately (handles quiet re-open scenarios).
+    final cached = _chapterCache[itemId];
+    if (cached != null && cached.isNotEmpty) {
+      _audioServiceBackgroundTaskLogger.info(
+          '[Chapters] Serving ${cached.length} cached chapters for $itemId');
+      updateCurrentMediaItemChapters(itemId, cached);
+      return;
+    }
+
+    _audioServiceBackgroundTaskLogger.info(
+        '[Chapters] Scheduling AVFoundation extraction for $itemId');
+    ChapterExtractorService.extractChapters(itemId).then((chapters) {
+      if (chapters.isNotEmpty) {
+        _audioServiceBackgroundTaskLogger.info(
+            '[Chapters] Extracted ${chapters.length} chapters for $itemId');
+        _chapterCache[itemId] = chapters;
+        updateCurrentMediaItemChapters(itemId, chapters);
+      } else {
+        _audioServiceBackgroundTaskLogger.warning(
+            '[Chapters] Extraction returned 0 chapters for $itemId');
+      }
+    }).catchError((Object e) {
+      _audioServiceBackgroundTaskLogger.severe(
+          '[Chapters] Extraction failed for $itemId: $e');
+    });
   }
 
   /// Generates PlaybackProgressInfo for the supplied item and player info.
@@ -579,6 +749,38 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
 
   void setNextInitialIndex(int index) {
     nextInitialIndex = index;
+  }
+
+  void setNextInitialPosition(Duration position) {
+    nextInitialPosition = position;
+  }
+
+  /// Inject [chapters] into the currently playing item's extras and broadcast
+  /// the updated [MediaItem] to all listeners (player screen, chapter widgets).
+  /// No-op if the current item's Jellyfin id doesn't match [itemId].
+  void updateCurrentMediaItemChapters(
+      String itemId, List<ChapterInfo> chapters) {
+    final current = mediaItem.valueOrNull;
+    final currentId = current?.extras?["itemJson"]?["Id"] as String?;
+    _audioServiceBackgroundTaskLogger.info(
+        '[Chapters] updateCurrentMediaItemChapters: target=$itemId current=$currentId');
+    if (currentId != itemId) {
+      _audioServiceBackgroundTaskLogger.warning(
+          '[Chapters] ID mismatch — skipping update (target=$itemId current=$currentId)');
+      return;
+    }
+
+    final updatedJson =
+        Map<String, dynamic>.from(current!.extras!["itemJson"] as Map)
+          ..["Chapters"] =
+              chapters.map((c) => c.toJson()).toList();
+
+    mediaItem.add(current.copyWith(
+      extras: Map<String, dynamic>.from(current.extras!)
+        ..["itemJson"] = updatedJson,
+    ));
+    _audioServiceBackgroundTaskLogger.info(
+        '[Chapters] MediaItem updated ✓ (${chapters.length} chapters)');
   }
 
   Future<void> reorderQueue(int oldIndex, int newIndex) async {

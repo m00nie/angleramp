@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:finamp/l10n/app_localizations.dart';
 import 'package:get_it/get_it.dart';
 
+import '../../services/progress_state_stream.dart';
+
 import '../../screens/album_screen.dart';
 import '../../services/jellyfin_api_helper.dart';
 import '../../services/music_player_background_task.dart';
@@ -140,6 +142,9 @@ class SongNameContent extends StatelessWidget {
             softWrap: false,
             maxLines: 1,
           ),
+          if (songBaseItemDto?.chapters?.isNotEmpty ?? false)
+            _CurrentChapterDisplay(
+                chapters: songBaseItemDto!.chapters!),
           const Padding(padding: EdgeInsets.symmetric(vertical: 2)),
           RichText(
             text: TextSpan(
@@ -155,6 +160,51 @@ class SongNameContent extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Shows the name of the currently playing chapter in the accent green.
+/// Only renders when the current media item has chapters.
+class _CurrentChapterDisplay extends StatelessWidget {
+  const _CurrentChapterDisplay({required this.chapters});
+
+  final List<ChapterInfo> chapters;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<ProgressState>(
+      stream: progressStateStream,
+      builder: (context, snapshot) {
+        final posTicks =
+            (snapshot.data?.position.inMicroseconds ?? 0) * 10;
+
+        ChapterInfo? current;
+        for (final ch in chapters) {
+          if (ch.startPositionTicks <= posTicks) {
+            current = ch;
+          } else {
+            break;
+          }
+        }
+
+        if (current?.name == null) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 3.0),
+          child: Text(
+            current!.name!,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF34D399),
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.fade,
+            softWrap: false,
+            maxLines: 1,
+          ),
+        );
+      },
     );
   }
 }
