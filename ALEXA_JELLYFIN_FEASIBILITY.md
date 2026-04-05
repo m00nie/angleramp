@@ -472,7 +472,7 @@ Three community projects prove core feasibility:
 - [Stream Long-Form Audio](https://developer.amazon.com/en-US/docs/alexa/custom-skills/use-long-form-audio.html)
 - [Account Linking Concepts](https://developer.amazon.com/en-US/docs/alexa/account-linking/account-linking-concepts.html)
 - [App-to-App Account Linking (from your app)](https://developer.amazon.com/en-US/docs/alexa/account-linking/app-to-app-account-linking-starting-from-your-app.html)
-- [App-to-App Account Linking (from Alexa app)](https://developer.amazon.com/en-US/docs/alexa/account-linking/app-to-app-account-linking-starting-from-Alexa-app.html)
+- [App-to-App Account Linking (from Alexa app)](https://developer.amazon.com/en-US/docs/alexa/account-linking/app-to-app-account-linking-starting-from-alexa-app.html)
 - [Set Up App-to-App Account Linking](https://www.developer.amazon.com/en-US/docs/alexa/account-linking/set-up-app-to-app-account-linking.html)
 - [APL Interface Reference](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/apl-interface.html)
 - [APL Tutorial: First Visual Response](https://developer.amazon.com/en-US/docs/alexa/alexa-presentation-language/tutorial-add-first-visual-response-custom-skill.html)
