@@ -58,11 +58,19 @@ class _ViewSelectorState extends State<ViewSelector> {
           if (_views.isEmpty) {
             // Only show music and books libraries; other types (movies, TV, etc.)
             // are not supported by Finamp.
+            final savedViews = _finampUserHelper.currentUser?.views ?? {};
             _views.addEntries(snapshot.data!
                 .where((element) =>
                     element.collectionType == "music" ||
                     element.collectionType == "books")
-                .map((e) => MapEntry(e, e.collectionType == "music")));
+                .map((e) => MapEntry(
+                    e,
+                    savedViews.isNotEmpty
+                        // Restore previously-saved selection (e.g. books library
+                        // that was checked last time the dialog was opened).
+                        ? savedViews.containsKey(e.id)
+                        // First-time setup: default to music=on, books=off.
+                        : e.collectionType == "music")));
 
             // If only one music library is available and user doesn't have a
             // view saved (assuming setup is in progress), skip the selector.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
+import '../../models/jellyfin_models.dart';
 import '../../services/music_player_background_task.dart';
 import '../../services/progress_state_stream.dart';
 import '../print_duration.dart';
@@ -134,6 +135,34 @@ class _ProgressSliderState extends State<ProgressSlider>
                     )
                   : const SizedBox.shrink();
             } else if (snapshot.hasData) {
+              final chapters = snapshot.data!.mediaItem?.extras?["itemJson"] != null
+                  ? BaseItemDto.fromJson(
+                          snapshot.data!.mediaItem!.extras!["itemJson"])
+                      .chapters
+                  : null;
+              final hasChapters = chapters != null && chapters.isNotEmpty;
+
+              // When chapters are present and the full player is shown, scope
+              // the slider and time labels to the current chapter only.
+              final int positionMicros =
+                  _dragValue?.toInt() ?? snapshot.data!.position.inMicroseconds;
+              final int sliderMinUs;
+              final int sliderMaxUs;
+              if (hasChapters && widget.allowSeeking) {
+                final bounds = _chapterBoundsForPosition(
+                  positionMicros: positionMicros,
+                  chapters: chapters,
+                  totalDurationUs:
+                      snapshot.data!.mediaItem?.duration?.inMicroseconds ?? 0,
+                );
+                sliderMinUs = bounds.$1;
+                sliderMaxUs = bounds.$2;
+              } else {
+                sliderMinUs = 0;
+                sliderMaxUs = snapshot.data!.mediaItem?.duration?.inMicroseconds ??
+                    snapshot.data!.playbackState.bufferedPosition.inMicroseconds;
+              }
+
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -141,7 +170,9 @@ class _ProgressSliderState extends State<ProgressSlider>
                   // For the full player we wrap in AnimatedBuilder so the
                   // glowing dot thumb repaints on every pulse animation tick.
                   if (widget.allowSeeking)
-                    AnimatedBuilder(
+                    Stack(
+                      children: [
+                        AnimatedBuilder(
                       animation: _pulseAnimation,
                       builder: (context, _) => SliderTheme(
                         data: _sliderThemeData.copyWith(
@@ -154,19 +185,10 @@ class _ProgressSliderState extends State<ProgressSlider>
                           ),
                         ),
                         child: Slider(
-                      min: 0.0,
-                      max: snapshot.data!.mediaItem?.duration == null
-                          ? snapshot.data!.playbackState.bufferedPosition
-                              .inMicroseconds
-                              .toDouble()
-                          : snapshot.data!.mediaItem!.duration!.inMicroseconds
-                              .toDouble(),
-                      value: (_dragValue ??
-                              snapshot.data!.position.inMicroseconds)
-                          .clamp(
-                              0,
-                              snapshot.data!.mediaItem!.duration!.inMicroseconds
-                                  .toDouble())
+                      min: sliderMinUs.toDouble(),
+                      max: sliderMaxUs.toDouble(),
+                      value: (positionMicros)
+                          .clamp(sliderMinUs, sliderMaxUs)
                           .toDouble(),
                       secondaryTrackValue: widget.showBuffer &&
                               snapshot.data!.mediaItem
@@ -175,12 +197,8 @@ class _ProgressSliderState extends State<ProgressSlider>
                           ? snapshot.data!.playbackState.bufferedPosition
                               .inMicroseconds
                               .clamp(
-                                0.0,
-                                snapshot.data!.mediaItem!.duration == null
-                                    ? snapshot.data!.playbackState
-                                        .bufferedPosition.inMicroseconds
-                                    : snapshot.data!.mediaItem!.duration!
-                                        .inMicroseconds,
+                                sliderMinUs.toDouble(),
+                                sliderMaxUs.toDouble(),
                               )
                               .toDouble()
                           : 0,
@@ -215,6 +233,11 @@ class _ProgressSliderState extends State<ProgressSlider>
                           : (_) {},
                     ),
                   ),
+                    ),
+                        // Chapter tick marks are only shown when the slider spans
+                        // the full book (no chapter scoping), i.e. never in the
+                        // current full-player chapter mode.
+                      ],
                     )
                   else
                     // Mini now-playing bar: custom-painted track + full-size
@@ -248,11 +271,9 @@ class _ProgressSliderState extends State<ProgressSlider>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          printDuration(
-                            Duration(
-                                microseconds: _dragValue?.toInt() ??
-                                    snapshot.data!.position.inMicroseconds),
-                          ),
+                          // Elapsed: time from chapter start (or track start)
+                          printDuration(Duration(
+                              microseconds: positionMicros - sliderMinUs)),
                           style: Theme.of(context)
                               .textTheme
                               .bodyMedium
@@ -263,7 +284,10 @@ class _ProgressSliderState extends State<ProgressSlider>
                                       ?.color),
                         ),
                         Text(
-                          printDuration(snapshot.data!.mediaItem?.duration),
+                          // Remaining: time to chapter end (or track end)
+                          printDuration(Duration(
+                              microseconds:
+                                  (sliderMaxUs - positionMicros).clamp(0, sliderMaxUs))),
                           style: Theme.of(context)
                               .textTheme
                               .bodyMedium
@@ -285,6 +309,28 @@ class _ProgressSliderState extends State<ProgressSlider>
         ),
       ),
     );
+  }
+
+  /// Returns (chapterStartUs, chapterEndUs) for the chapter covering [positionMicros].
+  (int, int) _chapterBoundsForPosition({
+    required int positionMicros,
+    required List<ChapterInfo> chapters,
+    required int totalDurationUs,
+  }) {
+    final positionTicks = positionMicros * 10;
+    int currentIdx = 0;
+    for (int i = 0; i < chapters.length; i++) {
+      if (chapters[i].startPositionTicks <= positionTicks) {
+        currentIdx = i;
+      } else {
+        break;
+      }
+    }
+    final startUs = chapters[currentIdx].startPositionTicks ~/ 10;
+    final endUs = currentIdx < chapters.length - 1
+        ? chapters[currentIdx + 1].startPositionTicks ~/ 10
+        : totalDurationUs;
+    return (startUs, endUs > startUs ? endUs : totalDurationUs);
   }
 }
 
@@ -475,3 +521,4 @@ class _MiniProgressPainter extends CustomPainter {
   bool shouldRepaint(_MiniProgressPainter old) =>
       old.value != value || old.pulse != pulse;
 }
+
