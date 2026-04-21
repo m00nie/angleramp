@@ -227,6 +227,8 @@ Future<void> _setupAudioServiceHelper() async {
       androidNotificationChannelName: "Playback",
       androidNotificationIcon: "mipmap/white",
       androidNotificationChannelId: "com.unicornsonlsd.finamp.audio",
+      fastForwardInterval: const Duration(seconds: 30),
+      rewindInterval: const Duration(seconds: 30),
     ),
   );
   // GetIt.instance.registerSingletonAsync<AudioHandler>(
@@ -459,6 +461,7 @@ class Finamp extends StatelessWidget {
                       ),
                       snackBarTheme: const SnackBarThemeData(
                         backgroundColor: Color(0xFF0F182E),
+                        contentTextStyle: TextStyle(color: Color(0xFFE2E8F0)),
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(10)),

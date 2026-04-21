@@ -240,27 +240,86 @@ class _ProgressSliderState extends State<ProgressSlider>
                       ],
                     )
                   else
-                    // Mini now-playing bar: custom-painted track + full-size
-                    // glowing dot in exactly 28 px, so it sits cleanly above
-                    // the album art without overlap.
-                    AnimatedBuilder(
-                      animation: _pulseAnimation,
-                      builder: (context, _) {
-                        final duration = snapshot.data!.mediaItem?.duration
-                                ?.inMicroseconds
-                                .toDouble() ??
-                            0.0;
-                        final position = snapshot.data!.position.inMicroseconds
-                            .toDouble()
-                            .clamp(0.0, duration > 0 ? duration : 1.0);
-                        return SizedBox(
-                          height: 28.0,
-                          width: double.infinity,
-                          child: CustomPaint(
-                            painter: _MiniProgressPainter(
-                              value: duration > 0 ? position / duration : 0.0,
-                              pulse: _pulseAnimation.value,
-                            ),
+                    // Mini now-playing bar: seekable custom-painted track.
+                    // LayoutBuilder gives us the bar width so we can convert
+                    // a tap/drag x-offset to a playback fraction.
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final barWidth = constraints.maxWidth;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTapDown: (details) {
+                            final duration = snapshot.data!.mediaItem?.duration
+                                    ?.inMicroseconds
+                                    .toDouble() ??
+                                0.0;
+                            if (duration <= 0) return;
+                            final fraction = (details.localPosition.dx /
+                                    barWidth)
+                                .clamp(0.0, 1.0);
+                            _audioHandler.seek(Duration(
+                                microseconds: (fraction * duration).toInt()));
+                          },
+                          onHorizontalDragStart: (details) {
+                            final duration = snapshot.data!.mediaItem?.duration
+                                    ?.inMicroseconds
+                                    .toDouble() ??
+                                0.0;
+                            if (duration <= 0) return;
+                            final fraction = (details.localPosition.dx /
+                                    barWidth)
+                                .clamp(0.0, 1.0);
+                            setState(() {
+                              _dragValue = fraction * duration;
+                            });
+                          },
+                          onHorizontalDragUpdate: (details) {
+                            final duration = snapshot.data!.mediaItem?.duration
+                                    ?.inMicroseconds
+                                    .toDouble() ??
+                                0.0;
+                            if (duration <= 0) return;
+                            final fraction = (details.localPosition.dx /
+                                    barWidth)
+                                .clamp(0.0, 1.0);
+                            setState(() {
+                              _dragValue = fraction * duration;
+                            });
+                          },
+                          onHorizontalDragEnd: (_) {
+                            if (_dragValue != null) {
+                              _audioHandler.seek(Duration(
+                                  microseconds: _dragValue!.toInt()));
+                              setState(() {
+                                _dragValue = null;
+                              });
+                            }
+                          },
+                          child: AnimatedBuilder(
+                            animation: _pulseAnimation,
+                            builder: (context, _) {
+                              final duration = snapshot.data!.mediaItem
+                                      ?.duration?.inMicroseconds
+                                      .toDouble() ??
+                                  0.0;
+                              final position = (_dragValue ??
+                                      snapshot.data!.position.inMicroseconds
+                                          .toDouble())
+                                  .clamp(
+                                      0.0, duration > 0 ? duration : 1.0);
+                              return SizedBox(
+                                height: 28.0,
+                                width: double.infinity,
+                                child: CustomPaint(
+                                  painter: _MiniProgressPainter(
+                                    value: duration > 0
+                                        ? position / duration
+                                        : 0.0,
+                                    pulse: _pulseAnimation.value,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         );
                       },

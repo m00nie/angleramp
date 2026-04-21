@@ -492,6 +492,20 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
   }
 
   @override
+  Future<void> fastForward() async {
+    final target = _player.position + const Duration(seconds: 30);
+    final duration = _player.duration;
+    await _player.seek(
+        duration != null && target > duration ? duration : target);
+  }
+
+  @override
+  Future<void> rewind() async {
+    final target = _player.position - const Duration(seconds: 30);
+    await _player.seek(target < Duration.zero ? Duration.zero : target);
+  }
+
+  @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
     try {
       switch (shuffleMode) {
@@ -832,6 +846,8 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler {
         MediaAction.seek,
         MediaAction.seekForward,
         MediaAction.seekBackward,
+        MediaAction.fastForward,
+        MediaAction.rewind,
       },
       androidCompactActionIndices: const [0, 1, 3],
       processingState: const {
